@@ -1,0 +1,13 @@
+[Desktop Entry]
+Categories=System;Utility;
+Comment=View and Modify Pacman Database
+Exec=/usr/bin/vpacman
+Icon=utilities-file-archiver.png
+Name=VPacman
+NoDisplay=false
+Path[$e]=
+StartupNotify=false
+Terminal=false
+TerminalOptions=
+Type=Application
+

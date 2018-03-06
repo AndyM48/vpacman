@@ -1,0 +1,54 @@
+#!/usr/bin/bash
+
+help () {
+
+echo "
+Usage:
+
+vpacman [OPTIONS]
+Run vpacman to View and Modify the pacman database.
+
+Options:
+	-d --debug	run in debug mode. Output is store in a file \" vpacman.debug\" in the users home folder.
+	-h --help	show this help. For extended help run vpacman and select Help > Help from the menu bar.
+"
+}
+
+while [ "X$1" != "X" ]; do
+  case "$1" in
+    -d|--debug)
+	DVAR="debug"
+	shift
+	;;
+    -h|--help)
+	DHELP=true
+	shift
+	;;
+    -dh|-hd)
+	help
+	DVAR="debug"
+	DHELP=true
+	shift
+	;;
+    *)
+	echo "Unknown option $1"
+    	help
+	exit
+	;;
+  esac
+done
+
+if [ $DHELP ]; then
+	help
+	if [ "$DVAR" ]; then
+		echo "Press <Enter> to run vpacman now: "
+		read -n 1 -s ans
+		if [ "$ans" ]  
+		then 
+			exit
+		fi
+	else
+		exit
+	fi
+fi
+"usr/share/vpacman/vpacman.tcl" $DVAR &
