@@ -51,4 +51,4 @@ if [ $DHELP ]; then
 		exit
 	fi
 fi
-"usr/share/vpacman/vpacman.tcl" $DVAR &
+"/usr/share/vpacman/vpacman.tcl" $DVAR &

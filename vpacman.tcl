@@ -1,6 +1,4 @@
-#! /bin/sh
-# the next line restarts using wish \
-exec wish "$0" "$@"
+#! /bin/wish
 
 set args $argv
 
@@ -24,7 +22,7 @@ global config_file
 # ..configurable
 global browser buttons editor geometry_config helpbg helpfg installed_colour outdated_colour save_geometry terminal terminal_string
 # ..variables
-global about_text anchor aur_all aur_messages aur_only aur_updates aur_versions colours count_all count_installed count_outdated count_uninstalled dirs e_time flag_actions filter filter_list find findfile find_message findtype geometry group help_text installed_colour known_browsers known_editors known_terminals list_all list_groups list_installed list_local list_outdated list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order index message outdated_colour pacman_database package_actions pkgfile_database pu_ans select_all selected_list selected_message state su_cmd tverr_message tverr_text tv_order geometry_view
+global about_text anchor aur_all aur_messages aur_only aur_updates aur_versions colours count_all count_installed count_outdated count_uninstalled dbpath dirs s_time flag_actions filter filter_list find findfile find_message findtype fs_upgrade geometry group help_text installed_colour known_browsers known_editors known_terminals list_all list_groups list_installed list_local list_outdated list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order index message outdated_colour package_actions pu_ans select_all selected_list selected_message state su_cmd tverr_message tverr_text tv_order geometry_view
 
 # Set directories
 if {[file isdirectory /home/$env(USER)] == 1} {
@@ -36,7 +34,7 @@ set program_dir [file dirname [info script]]
 if [string equal $program_dir "."] {
 	set program_dir [pwd]
 }
-set icon_dir "$program_dir/icons"
+set icon_dir "/usr/share/pixmaps/vpacman"
 file mkdir /tmp/vpacman
 set tmp_dir /tmp/vpacman
 
@@ -85,6 +83,8 @@ set count_all 0
 set count_installed 0
 set count_outdated 0
 set count_uninstalled 0
+# the path to the pacman sync databases
+set dbpath "/var/lib/pacman"
 # set debug mode
 # launch vpacman with no arguements to direct debug to stdout, use 'debug' to direct debug to a file in the home directory
 set debug false
@@ -102,8 +102,6 @@ puts $debug_out "Debug set to $debug\nDebug out is $debug_out"
 set dirs ""
 # default editor
 set editor ""
-# elapsed time since start or since last sync
-set e_time 0
 # packages which may need further cation of updated
 set flag_actions "gutenprint linux"
 # the filter selected in the checkboxes
@@ -118,6 +116,8 @@ set findfile ""
 set findtype "find"
 # this is the message for the number of items found
 set find_message ""
+# are we in the process of a full system upgrade
+set fs_upgrade false
 # set the options window to a fixed size
 set geometry_config "487x243"
 # the group selected in the combobox
@@ -236,12 +236,11 @@ set listview_selected_in_order ""
 set index 0
 # message to be shown in the button bar near the top of the window
 set message ""
-# when were these databases last updated?
-set pacman_database 0
-set pkgfile_database 0
 # list of updated packages which may require further actions
 set package_actions [list "linux" "Linux was updated, consider rebooting" "gutenprint" "Gutenprint was installed or updated, consider running Tools > Update cups" "pacman-mirrorlist" "Pacman-mirrorlist was updated, consider running Tools > Check Config Files for advice on how to update the mirrorlist"]
 set pu_ans ""
+# the time of the last sync in clock seconds
+set s_time 0
 # select_all is true if everything was selected from the drop down menu in listbox or from the menu bar
 set select_all false
 # variable to select one of the list options in the Filter frame
@@ -354,7 +353,7 @@ foreach i $list {
 
 proc .get_configs {} {
 
-global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg installed_colour outdated_colour pacman_database pkgfile_database save_geometry terminal terminal_string
+global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg installed_colour outdated_colour save_geometry terminal terminal_string
 
 	if [file exists "$config_file"] {
 	set fid [open "$config_file" r ]
@@ -376,8 +375,6 @@ global aur_all browser buttons config_file editor geometry geometry_config geome
 			help_foreground {set helpfg $var}
 			installed_colour {set installed_colour $var}
 			outdated_colour {set outdated_colour $var}
-			pacman_database {set pacman_database $var}
-			pkgfile_database {set pkgfile_database $var}
 			save_geometry {set save_geometry $var}
 			terminal {set terminal $var}
 			terminal_string {set terminal_string $var}
@@ -391,7 +388,7 @@ global aur_all browser buttons config_file editor geometry geometry_config geome
 
 proc .put_configs {} {
 
-global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg installed_colour outdated_colour pacman_database pkgfile_database save_geometry terminal terminal_string
+global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg installed_colour outdated_colour save_geometry terminal terminal_string
 
 	set fid [open "$config_file" w ]
 
@@ -420,11 +417,6 @@ global aur_all browser buttons config_file editor geometry geometry_config geome
 	puts $fid "save_geometry $save_geometry"
 	puts $fid "terminal $terminal" 
 	puts $fid "terminal_string $terminal_string" 
-	puts $fid ""
-	puts $fid "Please do not edit the following by hand"
-	puts $fid ""
-	puts $fid "pacman_database $pacman_database"
-	puts $fid "pkgfile_database $pkgfile_database"
 	close $fid 
 }
 
@@ -625,56 +617,54 @@ frame .buttonbar
 			# is pkgfile installed
 			if {[catch {exec which pkgfile}] != 0} {
 			# no - then use pacman	
-				# update the file database if it is more than 1 day old
-				# but first check the location of the database ...
-				set dbpath "/var/lib/pacman"
-				# ... in /etc/pacman.config
-				set fid [open "/etc/pacman.conf" r]
-				while {[eof $fid] == 0} {
-					gets $fid line
-					if {[string first "DBPath" $line] == 0} {
-						set dbpath [trim [string range $line [string first "=" $line]+1 end]]
+				# offer to update the file database if it is more than 1 day old
+				# we can work out the last update time from the temp databases
+				# if the files databases do not exist then create them
+				set pacman_database [get_file_mtime $tmp_dir/sync files]
+				if {$pacman_database == 0} {
+## do we need a message in here?
+					set ans "yes"
+				} else {
+					if {[expr [clock seconds] > [clock add $pacman_database 1 day]]} {
+						set ans [tk_messageBox -default yes -detail "Do you want to update the pacman files database now?" -icon question -message "The pacman files database was last updated at  [clock_format $pkgfile_database full]." -parent . -title "Update database?" -type yesno]
+					}
+					switch $ans {
+						no {}
+						yes {
+							set action "Update pacman file database"
+							set command "$su_cmd pacman -b $tmp_dir -Fy"
+							if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $tmp_dir -Fy\""}
+							set wait false
+							execute_command $action $command $wait
+					}
+					set command "$su_cmd pacman -b $tmp_dir -Foq $findfile"
+					if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $tmp_dir -Foq $findfile\""}
 					}
 				}
-				close $fid
-				
-				# if we can work out the last update time from the directory then use that
-				# otherwise use the saved update time
-				if {[file isdirectory /var/lib/pacman/sync]} {
-					set pacman_database [file mtime /var/lib/pacman/sync]
-				}
-				if {[expr [clock seconds] > [clock add $pacman_database 1 day]]} {
-					set action "Update pacman file database"
-					set command "$su_cmd pacman -b $tmp_dir -Fy"
-					if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $tmp_dir -Fy\""}
-					set wait false
-					execute_command $action $command $wait
-					set pacman_database [clock seconds]
-				}
-				set command "$su_cmd pacman -b $tmp_dir -Foq $findfile"
-				if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $tmp_dir -Foq $findfile\""}
 			} else {
 			# pkgfile is installed , so use that
 				# ask to update the file database if it is more than 1 day old
 				# pkgfile stores its data in /var/cache/pkgfile
-				# if we can work out the last update time from the directory then use that
-				# otherwise use the saved update time
-				if {[file isdirectory /var/cache/pkgfile]} {
+				# we can work out the last update time from the directory then use that
+				# first check if the directory exists and is not empty
+				if {[file isdirectory /var/cache/pkgfile] == 0 || [llength [glob -nocomplain "/var/cache/pkgfile/*"]] == 0} {
+## do we need a message in here?
+					set ans "yes"
+				} else {
 					set pkgfile_database [file mtime /var/cache/pkgfile]
-				}
-				if {[expr [clock seconds] > [clock add $pkgfile_database 1 day]]} {
-					set ans [tk_messageBox -default yes -detail "Do you want to update the pkgfile database now?" -icon question -message "The pkgfile database was last updated at  [clock_format $pkgfile_database full]." -parent . -title "Update database?" -type yesno]
-						switch $ans {
-							no {}
-							yes {
-								set action "Update pkgfile database"
-								set command "$su_cmd pkgfile -u"
-								if {$su_cmd == "su -c"} {set command "$su_cmd \"pkgfile -u\""}
-								set wait false
-								execute_command $action $command $wait
-								set pkgfile_database [clock seconds]
-							}	
-						}
+					if {[expr [clock seconds] > [clock add $pkgfile_database 1 day]]} {
+						set ans [tk_messageBox -default yes -detail "Do you want to update the pkgfile database now?" -icon question -message "The pkgfile database was last updated at [clock_format $pkgfile_database full]." -parent . -title "Update database?" -type yesno]
+					}
+					switch $ans {
+						no {}
+						yes {
+							set action "Update pkgfile database"
+							set command "$su_cmd pkgfile -u"
+							if {$su_cmd == "su -c"} {set command "$su_cmd \"pkgfile -u\""}
+							set wait false
+							execute_command $action $command $wait
+						}	
+					}
 				}
 				set command "$su_cmd pkgfile $findfile"
 				if {$su_cmd == "su -c"} {set command "$su_cmd \"pkgfile $findfile\""}
@@ -894,7 +884,7 @@ frame .filters
 		-variable aur_all
 			
 	label .filter_clock_label \
-		-text "Time since start"
+		-text "Time since last sync"
 		
 	label .filter_clock \
 		-text ""
@@ -1181,9 +1171,11 @@ frame .wp.wfone
 						# so this item is installed look at the next item
 # if the item has already been installed and is not a local package
 					} elseif {[lrange $listview_values 3 3] != "{}" && [lrange $listview_values 0 0] != "local"} {
-						if {[lrange $listview_values 3 3] != [lrange $listview_values 4 4]} {
+						if {[lrange $listview_values 2 2] != [lrange $listview_values 3 3] && $fs_upgrade == false} {
+							puts $debug_out "TreeviewSelect - FS_Upgrade is $fs_upgrade"
+							puts $debug_out "TreeviewSelect - [lindex $listview_values 1] upgrade from [lrange $listview_values 2 2] to [lrange $listview_values 3 3]"
 							if {$pu_ans != "yes"} {
-								set pu_ans [tk_messageBox -default no -detail "Do you want to continue, at your own risk, including [lindex $listview_values 1], answer No to start a new selection" -icon warning -message "Partial upgrades are not supported." -parent . -title "Warning" -type yesno]
+								set pu_ans [tk_messageBox -default no -detail "Do you want to continue, at your own risk, including [lindex $listview_values 1], answer No to start a new selection, then, to upgrade, select Full System Upgrade from the menus" -icon warning -message "Partial upgrades are not supported." -parent . -title "Warning" -type yesno]
 								puts $debug_out "Answer to partial upgrade package warning message is $pu_ans" 
 								switch $pu_ans {
 									no {
@@ -1773,6 +1765,8 @@ remove_listgroups
 # proc get_dataview {current}
 #	Get the information required, depending on the active tab in the dataview notebook. Since some of the details
 #		can take a while to retrieve, show a searching message where necessary.
+# proc get_file_mtime
+# 	Get the  last modigied time for a set of files
 # proc get_tree {rootdir}
 # 	Get all the directories and subdirectories in a given directory
 # proc flush_kb
@@ -1920,7 +1914,7 @@ global debug_out filter list_all list_local selected_list all tmp_dir
 	# now execute the command
 	# some of these commands return an error if there are no results so we need to catch those errors
 	set error [catch {eval [concat exec $execute_string]} paclist]
-	puts $debug_out "list_special - ran $execute_string with error $error - $paclist ([clock seconds])"
+	puts $debug_out "list_special - ran $execute_string with error $error ([clock seconds])"
 	if {[llength $paclist] > 1} {set paclist [split $paclist \n]}
 
 	# and handle the error:
@@ -2151,6 +2145,8 @@ set_balloon .buttonbar.configure_button "Options"
 set_balloon .filter_all "Show all packages for the selected Group"
 set_balloon .group_entry "Only show packages in the selected Group"
 set_balloon .group_label "Only show packages in the selected Group"
+set_balloon .filter_clock "The elapsed time since the last sync (d:h:m)"
+set_balloon .filter_clock_label "The elapsed time since the last sync (d:h:m)"
 set_balloon .filter_installed "Only show installed packages for the selected Group"
 set_balloon .filter_not_installed "Only show packages which are not installed for the selected Group"
 set_balloon .filter_updates "Only show packages which have not been updated for the selected Group"
@@ -2724,7 +2720,7 @@ global browser buttons config_file debug_out editor geometry geometry_config geo
 
 proc execute {type} {
 	
-global aur_only aur_updates debug_out e_time filter flag_actions listview_selected listview_selected_in_order list_outdated filter groups message  package_actions selected_list su_cmd terminal_string tmp_dir
+global aur_only aur_updates debug_out s_time filter flag_actions listview_selected listview_selected_in_order list_outdated filter groups message  package_actions selected_list su_cmd terminal_string tmp_dir
 # local variable are action command execute_string list mapstate type
 # runs whatever we need to do in a terminal window
 
@@ -2779,8 +2775,7 @@ global aur_only aur_updates debug_out e_time filter flag_actions listview_select
 		set action "Pacman Synchronize database"
 		set command "$su_cmd pacman -b $tmp_dir -Sy"
 		if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $tmp_dir -Sy\""}
-		.filter_clock_label configure -text "Time since last sync"
-		set e_time [clock seconds]
+		set s_time [clock seconds]
 		start_clock
 	} else {
 		return 1
@@ -2814,6 +2809,7 @@ global aur_only aur_updates debug_out e_time filter flag_actions listview_select
 	puts $debug_out "$logtext"
 	
 	# update the temporary sync database if necessary
+## but best work out if we actually did an upgrade
 	if {$type == "upgrade_all"} {update_db}
 	# set any reminders about actions needed for certain packages
 	set action_message ""
@@ -3537,6 +3533,19 @@ global aur_only browser debug_out tmp_dir
 	return 0
 }
 
+proc get_file_mtime {dir ext} {
+
+global debug_out
+# find the latest modified time for a series of files with a given extention in the given directory	
+
+	set last 0
+	set files [glob -nocomplain $dir/*.$ext]
+	foreach file $files {
+		set time [file mtime $file]
+		if {$last < $time} {set last $time}
+	}
+}
+
 proc get_tree {rootdir} {
 
 global debug_out dirs
@@ -3587,7 +3596,7 @@ global debug_out
 
 proc read_log {action}  {
 	
-global debug_out e_time 
+global debug_out 
 # read through the pacman log file and find, if possible, when the last sync happened
 
 	puts $debug_out "read_log called ([clock seconds])"
@@ -3597,21 +3606,28 @@ global debug_out e_time
 	set logfile [find_pacman_config logfile]
 	
 	puts $debug_out "read_log - Logfile is $logfile"
+	# read the last 200 lines of the logfile
 	set log_text [exec tail -200 $logfile]
-	set tmp_log_text [split $log_text \n]
-    set count 0
-    foreach line $tmp_log_text {
-		if {[string first "synchronizing package lists" $line] != -1} {			
-			set sync_time [clock scan [string range $line 1 16] -format "%Y-%m-%d %H:%M" ]
+	# find the last time the sync database was updated
+	# the update may be the copy sync database or the pacman sync database
+	# if the latter then it should have been via a full system update
+## but we may need to check that an external operation did the update
+	if {$action == "synctime"} {
+		set tmp_log_text [split $log_text \n]
+		set count 0
+		foreach line $tmp_log_text {
+			if {[string first "synchronizing package lists" $line] != -1} {			
+				set sync_time [clock scan [string range $line 1 16] -format "%Y-%m-%d %H:%M" ]
+			}
 		}
+		puts $debug_out "read_log - last update was $sync_time"
+		if {$sync_time != "na"} {
+			set s_time $sync_time
+			start_clock
+		}
+		puts $debug_out "read_log - synctime complete ([clock seconds])"
+		return s_time
 	}
-	puts $debug_out "read_log - last update was $sync_time"
-	if {$sync_time != "na"} {
-		.filter_clock_label configure -text "Time since last sync"
-		set e_time $sync_time
-		start_clock
-	}
-	puts $debug_out "read_log complete ([clock seconds])"
 	if {$action == "view"} {
 		view_text $log_text "Pacman Log"
 	}
@@ -3788,26 +3804,30 @@ global count_all count_installed count_uninstalled count_outdated debug_out list
 	.filter_updates configure -text "Updates Available ($count_outdated)"
 	
 	update
-
 	filter
-
 	list_groups
 }
 
 proc start_clock {} {
 	
-global debug_out e_time
+global debug_out s_time
 # work out the elapsed time since the required event (start or last sync)
 
-	set tmp_time [expr [clock seconds] - $e_time]
-	set days [expr int($tmp_time / 60 / 60 / 24)]
-	set hours [expr int($tmp_time / 60 / 60) - ($days * 24)]
-	set mins [string range "0[expr int(($tmp_time / 60) - ($hours * 60))]m" end-2 end] 
-	if {$days == 0} {
-		.filter_clock configure -text "${hours}h${mins}"
-	} else {
-		.filter_clock configure -text "${days} days ${hours} hours"
-	}
+	set e_time [expr [clock seconds] - $s_time]
+	set days [expr int($e_time / 60 / 60 / 24)]
+	if {[string length $days] == 1} {set days "0$days"}
+	set hours [expr int($e_time / 60 / 60) - ($days * 24)] 
+	set mins [expr int(($e_time / 60) - ($hours * 60) - ($days * 60 * 24))]
+#	# if the elapsed time includes days
+#	if {$days != 0} {
+#		.filter_clock configure -text "${days} d ${hours} h"
+#	# if the elapsed time is less one day but includes hours
+#	} elseif {$hours != 0} {
+#		.filter_clock configure -text "${hours} h ${mins} min" 
+#	} else {
+#		.filter_clock configure -text "${mins} min"
+#	}
+	.filter_clock configure -text "${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end] "
 	update
 	# wait a minute
 	after 60000 start_clock
@@ -3815,26 +3835,28 @@ global debug_out e_time
 
 proc system_upgrade {} {
 
-global debug_out filter find tvselect
+global debug_out filter find fs_upgrade tvselect
 
+	set fs_upgrade true
 	update idletasks
 	cleanup_checkbuttons false
 	set find ""
 	.buttonbar.entry_find delete 0 end
 	set filter "outdated"
 	filter
+	puts $debug_out "system_upgrade - clear tvselect"
+	set tvselect ""
+	all_select
 	# we changed the selection
 	# TreeviewSelect now updates the selection and sets a new message
 	# select everything in the outdated list
-	set tvselect ""
-	puts $debug_out "system_upgrade - clear tvselect"
-	all_select
 	# wait for TreeviewSelect to complete
 	vwait tvselect
 	puts $debug_out "system_upgrade - all selected"
 	execute "upgrade_all"
+	set fs_upgrade false
 	.filter_clock_label configure -text "Time since last sync"
-	set e_time [clock seconds]
+	set s_time [clock seconds]
 	start_clock
 	start
 	
@@ -3943,12 +3965,10 @@ global debug_out home message su_cmd
 
 proc update_db {} {
 
-global debug_out tmp_dir
+global dbpath debug_out tmp_dir
 # make sure that we are using an up to date copy of the sync databases
 
 	puts $debug_out "update_db started ([clock milliseconds] ms)"
-	set dbpath [find_pacman_config dbpath]
-	puts $debug_out "Database directory is now $dbpath"
 	puts $debug_out "Make a copy of the sync directory in $tmp_dir/sync"
 	file delete -force $tmp_dir/sync
 	file copy -force $dbpath/sync $tmp_dir
@@ -4143,20 +4163,28 @@ global debug_out
 # OK lets do it
 
 # make sure that the required link exists for the local database
-if {[catch {file link $tmp_dir/local}] == 1} {
-	puts $debug_out "Link local directory in $tmp_dir/local"
-	file link $tmp_dir/local $dbpath/local
-}
-# update_db will create the copy of the sync directory if necessary and copy the contenets from the pacman DBPath
-update_db
+file delete -force $tmp_dir/local
+set dbpath [find_pacman_config dbpath]
+puts $debug_out "Database directory is $dbpath"
+puts $debug_out "Link local directory in $tmp_dir/local"
+file link $tmp_dir/local $dbpath/local
 
+# check last modified times for the pacman database and its copy
+puts $debug_out "Pacman database was last modified at [file mtime $dbpath/sync]"
+if {[file isdirectory $tmp_dir/sync]} {
+	puts $debug_out "Copy database was last modified at [file mtime $tmp_dir/sync]"
+	# update_db will create the copy of the sync directory if necessary and copy the contents from the pacman DBPath
+	if {[file mtime $dbpath/sync] > [file mtime $tmp_dir/sync]} {update_db}
+} else {
+	# temp sync directory does not exists, so create it
+	update_db
+}
 # test the current configuration options
 test_configs
 puts $debug_out "Post configuration file: browser set to $browser, editor set to $editor, terminal set to $terminal"
 
 # set the elapsed time base time and start the clock
-set e_time [clock seconds]
+set s_time [file mtime $tmp_dir/sync]
 start_clock
 
 start
-read_log synctime
