@@ -1,5 +1,22 @@
 #! /bin/wish
 
+#	 This is Vpacman - a programme to View and modify the pacman database
+#
+#    Copyright (C) 2018  Andrew Myers <andrew dot myers@fdservices dot co dot uk>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 set args $argv
 
 # Check for required programmes
@@ -34,6 +51,9 @@ set program_dir [file dirname [info script]]
 if [string equal $program_dir "."] {
 	set program_dir [pwd]
 }
+
+## and what if the user wants to change the icons used?
+## maybe make the icon path configurable, in which case the path below may not be ideal - could change it to /vpacman/default?
 set icon_dir "/usr/share/pixmaps/vpacman"
 file mkdir /tmp/vpacman
 set tmp_dir /tmp/vpacman
@@ -189,7 +209,7 @@ The main window consists of a menu bar, a toolbar, a set of filter and list opti
 	
 	<lm2>Much of the information is sourced from the internet, and retrieval may be slow as a result. In these cases a \"Searching\" message is displayed, and if no result is found an \"Error\" message will be displayed in the appropriate field. In such case - try again.</lm2>"
 # list of known browsers
-set known_browsers [list chromium dillo epiphany falkon firefox opera]
+set known_browsers [list chromium dillo epiphany falkon firefox opera qupzilla]
 # list of known terminals
 set known_terminals [list {gnome-terminal} {--title <title> -- <command>} {konsole} {--title <title> -e <command>} {lxterminal} {--title <title> -e <command>} {mate-terminal} {--title <title> -e <command>} {roxterm} {--title <title> -e <command>} {vte} {--name <title> --command <command>} {vte-2.91} {--name <title> --command <command>} {xfce4-terminal} {--title <title> -e <command>} {xterm} {-title <title> -e <command>}]
 # list of known_editors
@@ -333,7 +353,8 @@ if { [exec id -u] eq 0 } {
 # and other gui su commands are not mainstream
 
 # OK just use the default
-puts $debug_out "User is $env(USER) - Home is $home - Programme Directory is $program_dir - Su command is set to $su_cmd"
+
+puts $debug_out "User is $env(USER) - Home is $home -Config file is $config_file - Programme Directory is $program_dir - Su command is set to $su_cmd"
 
 # Use wmctrl to raise an already running application
 set process [pid]
@@ -444,16 +465,27 @@ global aur_all browser buttons config_file editor geometry geometry_config geome
 wm title . "View and Modify Pacman Database"
 wm iconphoto . -default pacman
 wm geometry . $geometry
-wm protocol . WM_DELETE_WINDOW {
-	if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]; .put_configs}
-	# delete the aur_upgrades directory and all of its contents
-	# any aur packages with incomplete downloads or upgrades will have to be restarted
-	puts $debug_out "wm exit - delete $tmp_dir/aur_upgrades and its contents"
-	set error [catch {file delete -force "$tmp_dir/aur_upgrades"} result]
-	if {$error != 0} {puts $debug_out "\tfailed - $result"}
-	close $debug_out
-	exit
+
+proc set_wmdel_protocol {type} {
+	
+# set the main window exit code, depending on the type requested
+
+	if {$type == "noexit"} {
+		wm protocol . WM_DELETE_WINDOW {
+		puts $debug_out "Don't click on exit while a Terminal is open!"
+		}
+	} else { 
+		wm protocol . WM_DELETE_WINDOW {
+		if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]; .put_configs}
+		# delete the aur_upgrades directory and all of its contents
+		# any aur packages with incomplete downloads or upgrades will have to be restarted
+		set error [catch {file delete -force "$tmp_dir/aur_upgrades"} result]
+		close $debug_out
+		exit
+		}
+	}
 }
+set_wmdel_protocol exit
 
 # set up main window
 
@@ -1700,10 +1732,14 @@ remove_listgroups
 
 # PROCEDURES
 
+## Two procedures to load and save the configurable options
 # proc .get_configs
 #	Read the configuration variables from the configuration file (
 # proc .put_configs
 #	Write the configuration variables to the configuration file
+## Procedure to set and reset the main window delete protocol
+# proc set_wmdel_protocol {type} 
+# 	Set the main window exit code, depending on the type, exit or noexit, requested
 ## Two simple procedures to hide and show the listgroups widget as required
 # 	proc grid_listgroups
 # 	proc remove_listgroups
@@ -2225,7 +2261,13 @@ global debug_out editor terminal_string tmp_dir
 	puts $fid "read ans"
 	puts $fid "case \"\$ans\" in"
     puts $fid "\tN*|n*)  ;;"
-    puts $fid "\t*) $editor PKGBUILD ;;"
+    puts $fid "\t*) $editor PKGBUILD"
+	puts $fid "\techo -n \"\nContinue? \[Y/n] \""
+	puts $fid "\tread ans"
+	puts $fid "\tcase \"\$ans\" in"
+	puts $fid "\t\tN*|n*) exit ;;"
+	puts $fid "\t\t*);;"
+    puts $fid "\tesac"
     puts $fid "esac"
 	puts $fid "echo -e \"\n$ makepkg -sci \n\""
 	puts $fid "makepkg -sci"
@@ -2235,15 +2277,13 @@ global debug_out editor terminal_string tmp_dir
 	close $fid
 	puts $debug_out "Change mode to 0755 - $tmp_dir/vpacman.sh"
 	exec chmod 0755 "$tmp_dir/vpacman.sh"
-	
+
 	set action "Upgrade AUR Package"	
 	set execute_string [string map {<title> "$action" <command> "$tmp_dir/vpacman.sh"} $terminal_string]
 	puts $debug_out "aur_upgrade - set message to TERMINAL OPENED to run $action"
 	set_message terminal "TERMINAL OPENED to run $action"
 	# stop the exit button working while the terminal is opened
-	wm protocol . WM_DELETE_WINDOW {
-		puts $debug_out "Don't click on exit while a Terminal is open!"
-	}
+	set_wmdel_protocol noexit
 	update idletasks
 	puts $debug_out "aur_upgrade - execute $tmp_dir/vpacman.sh"
 	eval [concat exec $execute_string &]
@@ -2260,16 +2300,7 @@ global debug_out editor terminal_string tmp_dir
 	grab release .buttonbar.label_message
 	puts $debug_out "aur_upgrade - Grab released from .buttonbar.label_message"
 	# re-instate the exit button now that the terminal is closed
-	wm protocol . WM_DELETE_WINDOW {
-		if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]; .put_configs}
-		# delete the aur_upgrades directory and all of its contents
-		# any aur packages with incomplete downloads or upgrades will have to be restarted
-		puts $debug_out "wm exit - delete $tmp_dir/aur_upgrades and its contents"
-		set error [catch {file delete -force "$tmp_dir/aur_upgrades"} result]
-		if {$error != 0} {puts $debug_out "\tfailed - $result"}
-		close $debug_out
-		exit
-	}
+	set_wmdel_protocol exit
 	puts $debug_out "aur_upgrade - Window manager delete window re-instated"
 	# flush the keyboard buffer in case somone was randomly clicking on the window
 	flush_kb
@@ -2890,9 +2921,7 @@ global debug_out message su_cmd terminal_string tmp_dir
 	puts $debug_out "execute_command - set message to TERMINAL OPENED to run $action"
 	set_message terminal "TERMINAL OPENED to run $action"
 	# stop the exit button working while the terminal is opened
-	wm protocol . WM_DELETE_WINDOW {
-		puts $debug_out "Don't click on exit while a Terminal is open!"
-	}
+	set_wmdel_protocol noexit
 	update idletasks
 	puts $debug_out "execute_command - now execute $tmp_dir/vpacman.sh"
 	eval [concat exec $execute_string &]
@@ -2909,15 +2938,7 @@ global debug_out message su_cmd terminal_string tmp_dir
 	grab release .buttonbar.label_message
 	puts $debug_out "execute - Grab released from .buttonbar.label_message"
 	# re-instate the exit button now that the terminal is closed
-	wm protocol . WM_DELETE_WINDOW {
-		if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]; .put_configs}
-		# delete the aur_upgrades directory and all of its contents
-		# any aur packages with incomplete downloads or upgrades will have to be restarted
-		puts $debug_out "wm exit - delete $tmp_dir/aur_upgrades and its contents"
-		set error [catch {file delete -force "$tmp_dir/aur_upgrades"} result]
-		if {$error != 0} {puts $debug_out "\tfailed - $result"}
-		exit
-	}
+	set_wmdel_protocol exit
 	puts $debug_out "execute - Window manager delete window re-instated"
 	# flush the keyboard buffer in case somone was randomly clicking on the window
 	flush_kb
@@ -3514,7 +3535,7 @@ global aur_only browser debug_out tmp_dir
 				grid remove .wp.wftwo.ydataview_files_scroll
 				.wp.wftwo.dataview.check insert 1.0 "Checking ..."
 				update
-				set error [catch {exec pacman -b $tmp_dir-Qk $listview_current} result]
+				set error [catch {exec pacman -b $tmp_dir -Qk $listview_current} result]
 				.wp.wftwo.dataview.check delete 1.0 end
 				if {[string first "error:" $result] == -1} {
 					set result [split $result \n]
@@ -3835,7 +3856,7 @@ global debug_out s_time
 
 proc system_upgrade {} {
 
-global debug_out filter find fs_upgrade tvselect
+global debug_out filter find fs_upgrade s_time tvselect
 
 	set fs_upgrade true
 	update idletasks
@@ -3855,7 +3876,6 @@ global debug_out filter find fs_upgrade tvselect
 	puts $debug_out "system_upgrade - all selected"
 	execute "upgrade_all"
 	set fs_upgrade false
-	.filter_clock_label configure -text "Time since last sync"
 	set s_time [clock seconds]
 	start_clock
 	start
