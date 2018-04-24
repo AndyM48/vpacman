@@ -339,18 +339,22 @@ puts $debug_out "Pre configuration file: browser set to $browser, editor set to 
 
 # Check if we have been run as root or with root privileges
 if { [exec id -u] eq 0 } {
+	puts $debug_out "Vpacman is running with root priveleges"
 	set su_cmd ""
 # if not root then do we have sudo privileges without a password
 } else {
-	set error [catch {exec sudo -n true} result]
-	# the -n option is only needed to distinguish the su_cmd from the next one!
-	if {$error == 0} {set su_cmd "sudo -n"}
-	# or perhaps we can use sudo but still need a password
-	if {$result == "sudo: a password is required"} {set su_cmd "sudo"}
+	set error [catch {exec echo "" | sudo -S -v} result]
+	puts $debug_out "sudo -S -v returned error $error and result: $result"
+	if {$error == 0} {
+		# the -n option is only needed to distinguish the su_cmd from the next one!
+		puts $debug_out "Vpacman: user can run sudo without a password"
+		set su_cmd "sudo -n"
+	} elseif {[string first "may not run sudo" $result] == -1} {
+		# so we can use sudo but still need a password
+		puts $debug_out "Vpacman: user can run sudo with a password"
+		set su_cmd "sudo"
+	}
 }
-# tried gksu as an alternative, but a) it is just a front end to su and sudo and b) it does not play well with complex pacman commands like -Syu
-# kdesu is no longer available
-# and other gui su commands are not mainstream
 
 # OK just use the default
 
@@ -2225,7 +2229,7 @@ global debug_out listview_selected
 
 proc aur_upgrade {package} {
 
-global debug_out editor terminal_string tmp_dir	
+global debug_out editor su_cmd terminal_string tmp_dir	
 # download and install a package from AUR
 
 # if the package directory exists then it may have been the result of an aborted upgrade from before
@@ -2261,7 +2265,11 @@ global debug_out editor terminal_string tmp_dir
 	puts $fid "read ans"
 	puts $fid "case \"\$ans\" in"
     puts $fid "\tN*|n*)  ;;"
-    puts $fid "\t*) $editor PKGBUILD"
+    if {[string trim $editor] == ""} {
+		puts $fid "\t*) more PKGBUILD"
+	} else {
+		puts $fid "\t*) $editor PKGBUILD"
+	}
 	puts $fid "\techo -n \"\nContinue? \[Y/n] \""
 	puts $fid "\tread ans"
 	puts $fid "\tcase \"\$ans\" in"
@@ -2269,14 +2277,41 @@ global debug_out editor terminal_string tmp_dir
 	puts $fid "\t\t*);;"
     puts $fid "\tesac"
     puts $fid "esac"
-	puts $fid "echo -e \"\n$ makepkg -sci \n\""
-	puts $fid "makepkg -sci"
+    puts $fid "function CheckIt () {"
+	puts $fid "\techo \"\nSorry - an error occurred\""
+	puts $fid "\techo \"\nPossibly missing dependancies.\""
+	puts $fid "\techo \"If so then install all the missing dependancies and try again.\""
+	puts $fid "\techo -ne \"\nInstall $package failed, press ENTER to close the terminal.\""
+	puts $fid "\tread ans"
+	puts $fid "\texit 1"
+	puts $fid "}"
+	puts $fid "echo -e \"\n$ makepkg -sci\n\""
+	if {$su_cmd == "su -c"} {
+		puts $fid "makepkg -c"
+		puts $fid "if \[ $? -ne 0 \]"
+		puts $fid "then"
+		puts $fid "\tCheckIt"
+		puts $fid "fi"
+		puts $fid "echo -e \"\nA password is required to install $package\n\""
+	} else {
+		puts $fid "makepkg -sc"
+		puts $fid "if \[ $? -ne 0 \]"
+		puts $fid "then"
+		puts $fid "\tCheckIt"
+		puts $fid "fi"
+	}
+    if {$su_cmd == "su -c"} {
+		puts $fid "$su_cmd \"pacman -U *.pkg.tar.xz\""
+	} else {
+		puts $fid "$su_cmd pacman -U *.pkg.tar.xz"
+	}
 	puts $fid "echo -ne \"\nInstall $package finished, press ENTER to close the terminal.\""
 	puts $fid "read ans"
-	puts $fid "exit" 
+	puts $fid "exit 0" 
 	close $fid
 	puts $debug_out "Change mode to 0755 - $tmp_dir/vpacman.sh"
 	exec chmod 0755 "$tmp_dir/vpacman.sh"
+#close $debug_out; exit
 
 	set action "Upgrade AUR Package"	
 	set execute_string [string map {<title> "$action" <command> "$tmp_dir/vpacman.sh"} $terminal_string]
@@ -2292,12 +2327,14 @@ global debug_out editor terminal_string tmp_dir
 	puts $debug_out "\taur_upgrade - command started in terminal"
 	# place a grab on something unimportant to avoid random button presses on the window
 	grab set .buttonbar.label_message
+	bind .buttonbar.label_message <ButtonRelease> "catch {exec wmctrl -R \"$action\"}"
 		update idletasks
 	puts $debug_out "aur_upgrade - set grab on .buttonbar.label_message"
 	# wait for the terminal to close
 	execute_terminal_isclosed $action
 	# release the grab
 	grab release .buttonbar.label_message
+	bind .buttonbar.label_message <ButtonRelease> {}
 	puts $debug_out "aur_upgrade - Grab released from .buttonbar.label_message"
 	# re-instate the exit button now that the terminal is closed
 	set_wmdel_protocol exit
@@ -2591,12 +2628,12 @@ global browser buttons config_file debug_out editor geometry geometry_config geo
 		-command {
 			#check the entries before saving:
 			set tests 0
-			if {[catch {exec which $browser}] == 1} {
+			if {$browser != "" && [catch {exec which $browser}] == 1} {
 				tk_messageBox -default ok -detail "\"$browser\" is not installed" -icon warning -message "Choose a different browser" -parent . -title "Incorrect Option" -type ok 
 				focus .config.browser
 				set tests 1
 			}
-			if {[catch {exec which $editor}] == 1} {
+			if {$editor != "" && [catch {exec which $editor}] == 1} {
 				tk_messageBox -default ok -detail "\"$editor\" is not installed" -icon warning -message "Choose a different editor" -parent . -title "Incorrect Option" -type ok 
 				focus .config.editor
 				set tests 1
@@ -2804,8 +2841,12 @@ global aur_only aur_updates debug_out s_time filter flag_actions listview_select
 		if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -R $list\""}
 	} elseif {$type == "sync"} {
 		set action "Pacman Synchronize database"
-		set command "$su_cmd pacman -b $tmp_dir -Sy"
-		if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $tmp_dir -Sy\""}
+		if {[catch {exec which fakeroot}] == 0} {
+			set command "fakeroot pacman -b $tmp_dir -Sy"
+		} else {
+			set command "$su_cmd pacman -b $tmp_dir -Sy"
+			if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $tmp_dir -Sy\""}
+		}
 		set s_time [clock seconds]
 		start_clock
 	} else {
@@ -2930,12 +2971,14 @@ global debug_out message su_cmd terminal_string tmp_dir
 	puts $debug_out "execute_command - command started in terminal"
 	# place a grab on something unimportant to avoid random button presses on the window
 	grab set .buttonbar.label_message
+	bind .buttonbar.label_message <ButtonRelease> "catch {exec wmctrl -R \"$action\"}"
 		update idletasks
 	puts $debug_out "execute - set grab on .buttonbar.label_message"
 	# wait for the terminal to close
 	execute_terminal_isclosed $action
 	# release the grab
 	grab release .buttonbar.label_message
+	bind .buttonbar.label_message <ButtonRelease> {}
 	puts $debug_out "execute - Grab released from .buttonbar.label_message"
 	# re-instate the exit button now that the terminal is closed
 	set_wmdel_protocol exit
@@ -3456,7 +3499,7 @@ global aur_only browser debug_out tmp_dir
 						#  if we know of a browser, and this is a local package then use the package name to make a URL and insert tags accordingly
 						if {$aur_only == true && $browser != "" && [string first "Name" $row] == 0} {
 							# click on the link to view it in the selected browser
-							.wp.wftwo.dataview.moreinfo tag bind get_aur <ButtonRelease-1> "exec $browser https://aur.archlinux.org/packages/[string range $row 18 end] &"
+							.wp.wftwo.dataview.moreinfo tag bind get_aur <ButtonRelease-1> "puts $debug_out \"GET AUR URL\"; exec $browser https://aur.archlinux.org/packages/[string range $row 18 end] &"
 							# add the normal text to the text box
 							.wp.wftwo.dataview.moreinfo insert end "[string range $row 0 17]" 
 							# add the package name to the text box and use the pre-defined tags to alter how it looks
@@ -3464,7 +3507,7 @@ global aur_only browser debug_out tmp_dir
 						#  if we know of a browser then find URL and insert tags accordingly
 						} elseif {$browser != "" && [string first "URL" $row] == 0} {
 							# click on the link to view it in the selected browser
-							.wp.wftwo.dataview.moreinfo tag bind get_url <ButtonRelease-1> "exec $browser [string range $row 18 end] &"
+							.wp.wftwo.dataview.moreinfo tag bind get_url <ButtonRelease-1> "puts $debug_out \"GET URL - exec $browser [string range $row 18 end]\"; exec $browser [string range $row 18 end] &"
 							# add the normal text to the text box
 							.wp.wftwo.dataview.moreinfo insert end "[string range $row 0 17]" 
 							# add the URL to the text box and use the pre-defined tags to alter how it looks
@@ -3874,12 +3917,16 @@ global debug_out filter find fs_upgrade s_time tvselect
 	# wait for TreeviewSelect to complete
 	vwait tvselect
 	puts $debug_out "system_upgrade - all selected"
-	execute "upgrade_all"
+	set return [execute "upgrade_all"]
+	if {$return == 1} {
+		all_clear
+		set fs_upgrade false
+		return 1
+	}
 	set fs_upgrade false
 	set s_time [clock seconds]
 	start_clock
 	start
-	
 }
 
 proc test_configs {} {
@@ -3888,11 +3935,11 @@ global browser editor known_browsers known_editors known_terminals terminal
 # Test for sane configuration options
 
 	set tests 0
-	if {[catch {exec which $browser}] == 1} {
+	if {$browser != "" && [catch {exec which $browser}] == 1} {
 		tk_messageBox -default ok -detail "\"$browser\" is configured but is not installed" -icon warning -message "The browser has been reset" -parent . -title "Incorrect Option" -type ok 
 		configurable_default browser $known_browsers
 	}
-	if {[catch {exec which $editor}] == 1} {
+	if {$editor != "" && [catch {exec which $editor}] == 1} {
 		tk_messageBox -default ok -detail "\"$editor\" is configured but is not installed" -icon warning -message "The editor has been reset" -parent . -title "Incorrect Option" -type ok 
 		configurable_default editor $known_editors
 	}
