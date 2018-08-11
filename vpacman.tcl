@@ -20,7 +20,7 @@
 # save any arguements passed to vpacman
 set args $argv
 # save the new version number
-set version "1.2.0"
+set version "1.2.1"
 
 # check for required programmes
 set required "pacman wmctrl"
@@ -53,13 +53,13 @@ if {[string first "restart" $args] == -1} {
 
 # DECLARATIONS
 # .. directories
-global home icon_dir program_dir tmp_dir
+global home program_dir tmp_dir
 # .. configuration
 global config_file 
 # ..configurable
-global browser buttons editor geometry_config helpbg helpfg installed_colour outdated_colour save_geometry terminal terminal_string
+global browser buttons editor geometry geometry_view helpbg helpfg icon_dir installed_colour outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
 # ..variables
-global about_text anchor args aur_all aur_messages aur_only aur_updates aur_versions bubble colours count_all count_installed count_outdated count_uninstalled dbpath files_upgrade filter filter_list find findfile find_message findtype fs_upgrade geometry geometry_view group help_text installed_colour known_browsers known_editors known_terminals list_all list_groups list_installed list_local list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order index message outdated_colour package_actions part_upgrade selected_list selected_message set_part_upgrade start_time state su_cmd sync_time tverr_message tverr_text version
+global about_text anchor args aur_all aur_messages aur_only aur_updates aur_versions bubble colours count_all count_installed count_outdated count_uninstalled dbpath files_upgrade filter filter_list find findfile find_message findtype fs_upgrade geometry_config group help_text installed_colour known_browsers known_editors known_terminals list_all list_groups list_installed list_local list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order index message outdated_colour package_actions part_upgrade selected_list selected_message set_part_upgrade start_time state su_cmd sync_time tverr_message tverr_text version
 
 # VARIABLES
 
@@ -200,11 +200,16 @@ The main window consists of a menu bar, a toolbar, a set of filter and list opti
 	Tools:	<lm3>Full System Upgrade > The only supported method of updating outdated packages. It may be wise to check the latest news before performing a full system upgrade.</lm3>
 			<lm3>Install > Ask pacman to install or reinstall the selected packages. Partial upgrades are not supported. AUR packages can only be updated one at a time.</lm3>
 			<lm3>Delete > Ask pacman to delete the selected packages.</lm3>
-			<lm3>Sync > Ask pacman to synchronize the pacman database. The elapsed time since the last synchronization is shown at the foot of the filter and list options. If no recent synchronization has been amde then the elapsed time shows the time since Vpacman was started.</lm3>
+			<lm3>Sync > Ask pacman to synchronize the pacman database. The elapsed time since the last synchronization is shown at the foot of the filter and list options. If no recent synchronization has been made then the elapsed time shows the time since Vpacman was started.</lm3>
 			<lm3>Check Config Files > Display a list of any configuration file which need to be dealt with. See \"https://wiki.archlinux.org/index.php/Pacman/Pacnew_and_Pacsave\"</lm3>
 			<lm3>Clean Pacman Cache > Delete any superfluous packages from the pacman cache to release disk space. This will keep at least the most recent three versions of each package.</lm3>
 			<lm3>Update Cups > Run cups_genppdupdate if necessary and restart cups. Use if gutenprint has been updated.</lm3> 
 			<lm3>Options > Change any of the configurable options for Vpacman. Allows for editing the configuration file manually, which could break Vpacman! In case of problems delete the configuration file \"~/.vpacman.config\" to return all the values to default.</lm3>
+	View:	<lm3>Latest News > Read the last year of news from archlinux.org</lm3> 
+			<lm3>Pacman Configuration > View the the pacman configuration file.</lm3> 
+			<lm3>Recent Pacman Log > Read the last 200 entries in the pacman log file.</lm3> 
+			<lm3>Hide Menubar > Hide the menu bar. Can be shown again using the right click menu in the Packages Window - see below.</lm3> 
+			<lm3>Hide/Show Toolbar > Hide or show the tool bar</lm3> 
 	Help:	<lm3>Help > This help message.</lm3>
 			<lm3>About > Information about this programme.</lm3>
 			
@@ -237,7 +242,7 @@ The main window consists of a menu bar, a toolbar, a set of filter and list opti
 	<lm2>Tip: If the filter shows unexpected results make sure that you have Groups set to \"All\" and that the Find entry is clear.</lm2>
 	
 	<lm2>Left-Click on any line to select that line. Left-Click a second time to de-select the line. Shift-click to select a range of lines, Control-click to add to a selection.</lm2>
-	<lm2>Right-Click to bring up a menu similar to the tools menu above.</lm2>
+	<lm2>Right-Click to bring up a menu similar to the tools menu above. If the menu bar has been hidden then the last item on the list will offer to show the menu bar again.</lm2>
 	<lm2>Left-Click on a heading to sort the package list by that heading. Left-Click a second time to sort the list in reverse order.</lm2>
 	<lm2>To aid in navigating the list there is a scroll bar at the right edge of the window. Since some of the lists displayed can be rather long a Right-Click on the scroll bar at any point will align the list to that point. Right-Click on the top arrow will display the top of the list, Right-Click on the bottom arrow will display the end of the list.</lm2>
 
@@ -303,6 +308,10 @@ set selected_list 0
 set selected_message ""
 # suppress the partial upgrade messages- 0 no, 1 maybe, 2 yes.
 set set_part_upgrade 0
+# show the menu bar yes or no
+set show_menu "yes"
+# show the toolbar yes or no
+set show_buttonbar "yes"
 # set start_time
 set start_time [clock milliseconds]
 # the state of any package(s) selected: install, delete or blank(none)
@@ -329,9 +338,10 @@ if { [exec id -u] eq 0 } {
 	# the -n option is only needed to distinguish the su_cmd from the next one!
 	if {$error == 0} {set su_cmd "sudo -n"}
 	# or perhaps we can use sudo but still need a password
-	if {$result == "sudo: a password is required"} {set su_cmd "sudo"}
+	set error [catch {exec sudo -v} result]
+	if {[string first "may not run sudo on" $result] == -1} {set su_cmd "sudo"}
 }
-# only certain commands will need elevated privileges. SInce we are running all commands in a terminal session 
+# only certain commands will need elevated privileges. Since we are running all commands in a terminal session 
 # we can ask for a password in taht session if necessary.
 # so there really is no need to use a graphical su command.
 ## need to add a warning if trying to run vpacman as root. AUR installs won't work anyway.
@@ -452,6 +462,8 @@ puts $debug_out "User is $env(USER) - Home is $home -Config file is $config_file
 #	Test, up to three times for an internet connection.
 # proc test_system
 #	Test the system to see if it appears to be in an unstable condition.
+# proc toggle_buttonbar
+#	Toggle the menu entry to show or hide the buttonbar
 # proc update_cups
 # 	if gutenprint is installed run cups-genppdupdate to update ppds - restart cups
 # proc update_db
@@ -497,7 +509,7 @@ global debug_out listview_selected part_upgrade set_part_upgrade tvselect
 
 proc aur_upgrade {package} {
 
-global debug debug_out editor geometry listview_selected listview_selected_in_order program_dir save_geometry start_time terminal_string tmp_dir	
+global debug debug_out editor geometry listview_selected listview_selected_in_order program_dir save_geometry start_time su_cmd terminal_string tmp_dir	
 # download and install a package from AUR
 
 # if the package directory exists then it may have been the result of an aborted upgrade from before
@@ -553,15 +565,22 @@ global debug debug_out editor geometry listview_selected listview_selected_in_or
 	puts $fid "\t\t*);;"
     puts $fid "\tesac"
     puts $fid "esac"
-	puts $fid "echo -e \"\n$ makepkg -sci \n\""
-	puts $fid "makepkg -sci"
+    if {$su_cmd != "su -c"} {
+		puts $fid "echo -e \"\n$ makepkg -sci \n\""
+		puts $fid "makepkg -sci"
+	} else {
+		puts $fid "echo -e \"\n$ makepkg -sc \n\""
+		puts $fid "if makepkg -sc ; then"
+		puts $fid "\techo -e \"\nInstalling $package using pacman -U  \n\""
+		puts $fid "\tsu -c \"pacman -U $package\*.pkg.tar.xz\""
+		puts $fid "fi"
+	}
 	puts $fid "echo -ne \"\nInstall $package finished, press ENTER to close the terminal.\""
 	puts $fid "read ans"
 	puts $fid "exit" 
 	close $fid
 	puts $debug_out "Change mode to 0755 - $tmp_dir/vpacman.sh"
 	exec chmod 0755 "$tmp_dir/vpacman.sh"
-
 	set action "Upgrade AUR Package"	
 	set execute_string [string map {<title> "$action" <command> "$tmp_dir/vpacman.sh"} $terminal_string]
 	puts $debug_out "aur_upgrade - set message to TERMINAL OPENED to run $action"
@@ -638,16 +657,16 @@ global debug debug_out editor geometry listview_selected listview_selected_in_or
 		}
 	}
 	# check that vpacman was not updated, if it was then restart it
-	# it is not likely that it woudl be re-installed here (since it is running) but the upgrade may have been aborted
-	if {$package == "vpacman"} {
+	# it is not likely that it would be re-installed here (since it is running) but the upgrade may have been aborted
+	if {$package == "vpacman" && ($count_reinstalls == 1 || $count_upgrades == 1)} {
 		tk_messageBox -default ok -detail "vpacman will now restart" -icon info -message "vpacman was updated" -parent . -title "Further Action" -type ok
 		if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]; put_configs}
 		puts $debug_out "Restart called after vpacman update"
 		close $debug_out
 		if {$debug} {
-			exec $program_dir/vpacman.tcl debug restart
+			exec $program_dir/vpacman.tcl debug restart &
 		} else {
-			exec $program_dir/vpacman.tcl restart
+			exec $program_dir/vpacman.tcl restart &
 		}
 		exit
 	}
@@ -751,7 +770,7 @@ bind bubble <Motion> {
 proc check_config_files {} {
 
 global debug_out start_time su_cmd
-# check /etc for any configuration files which need to be updated
+# check /etc and /usr/bin for any configuration files which need to be updated
 
 	puts $debug_out "check_config_files - called ([expr [clock milliseconds] - $start_time])"
 	set config_files ""
@@ -763,7 +782,7 @@ global debug_out start_time su_cmd
 		tk_messageBox -default ok -detail "Consider installing the findutils package" -icon info -message "The find command is required." -parent . -title "Cannot Check Config Files" -type ok
 		return 1
 	}
-	set error [catch {exec find /etc \( -name *.pacnew -o -name *.pacsave \) -print} files]
+	set error [catch {exec find /etc /usr/bin \( -name *.pacnew -o -name *.pacsave \) -print} files]
 	foreach file [split $files \n] {
 		if {[string first "Permission denied" $file] == -1} {
 			set config_files [append config_files $lf $file]
@@ -870,7 +889,7 @@ global debug_out
 proc configurable {} {
 # Set configurable variables to sane values
 
-global browser buttons debug_out editor geometry geometry_view helpfg helpbg installed_colour known_browsers known_editors known_terminals outdated_colour save_geometry terminal terminal_string
+global browser buttons debug_out editor geometry geometry_view helpfg helpbg icon_dir installed_colour known_browsers known_editors known_terminals outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
 
 	puts $debug_out "Set configurable variables"
 	# initialize the browser variable to the first browser in the common browsers list which is installed
@@ -888,8 +907,11 @@ global browser buttons debug_out editor geometry geometry_view helpfg helpbg ins
 	# set colours to acceptable values
 	set helpbg #EBE8E4	
 	set helpfg #FFFFFF
+	set icon_dir "/usr/share/pixmaps/vpacman"
 	set installed_colour blue
 	set outdated_colour red
+	set show_menu "yes"
+	set show_buttonbar "yes"
 }
 
 proc configurable_default {variable list} {
@@ -924,7 +946,7 @@ global browser debug_out editor terminal terminal_string
 
 proc configure {} {
 
-global browser buttons config_file debug_out editor geometry geometry_config geometry_view icon_dir installed_colour known_terminals old_values outdated_colour  terminal terminal_string save_geometry 
+global browser buttons config_file debug_out editor geometry geometry_config geometry_view icon_dir installed_colour known_terminals old_values outdated_colour  terminal terminal_string save_geometry
 
 	toplevel .config
 
@@ -946,7 +968,7 @@ global browser buttons config_file debug_out editor geometry geometry_config geo
 	if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]}
 	# and save all the values in case we need to reverse them later
 	set old_values ""
-	lappend old_values $buttons $browser $editor $geometry $geometry_config $save_geometry $terminal $terminal_string $installed_colour $outdated_colour
+	lappend old_values $buttons $browser $editor $geometry $geometry_config $save_geometry $terminal $terminal_string $installed_colour $outdated_colour $icon_dir
 	set new_terminal $terminal
 	
 	# get the possible terminal values
@@ -1119,13 +1141,21 @@ global browser buttons config_file debug_out editor geometry geometry_config geo
 				focus .config.outdated_colour
 				set tests 1
 			}
+			if {$icon_dir != [lindex $old_values 10]} {
+				# reload the images for the button bar
+				puts $debug_out "configure - the icon location \"$icon_dir\" has changed, previous directory was \"[lindex $old_values 10]\""
+				if {[set_images] != 0} {
+					tk_messageBox -default ok -detail "\"$icon_dir\" does not exist or does not contain all the required icons\nThe icon directory has not been changed" -icon warning -message "Error in icon directory" -parent . -title "Incorrect Option" -type ok 
+					# reset the icon_direcory and the images
+					puts $debug_out "configure - reset the icon directory to \"[lindex $old_values 10]\" and reload the images"
+					set icon_dir [lindex $old_values 10]
+					set_images
+				}
+			}
 			if {$buttons != [lindex $old_values 1]} {
 				# reload the images for the button bar
 				puts $debug_out "configure - the button size has changed"
-				image create photo tools -file "$icon_dir/$buttons/configure.png"
-				image create photo delete -file "$icon_dir/$buttons/edit-delete.png"
-				image create photo install -file "$icon_dir/$buttons/dialog-ok-apply.png"
-				image create photo reload -file "$icon_dir/$buttons/edit-redo.png"
+				set_images
 			}
 			if {$tests == 0} {
 				puts $debug_out "configure - All tests have passed so save configuration options"
@@ -1645,13 +1675,16 @@ global debug_out start_time
 
 proc filter {} {
 	
-global aur_updates debug_out filter filter_list find findtype group list_all list_installed list_outdated list_uninstalled listview_current
+global aur_updates debug_out filter filter_list find findtype group list_all list_installed list_outdated list_special list_uninstalled listview_current
 # procedure to run when we need to filter the output
 # element and list are local variables
 
 	puts $debug_out "filter called - filter is \"$filter\", group is \"$group\", find is \"$find\""
 
-	if {$filter == "none" && $find == "" && $group == "All"} {return 0}
+	# if the group setting is not applicable then reset it to All
+	if {$filter == "orphans" || $filter == "aur"} {set group "All"}
+	# if no filter is required then return
+	if {($filter == 0 || $filter == "orphans") && $find == "" && $group == "All"} {return 0}
 
 	set filter_list ""
 	set list ""
@@ -1674,16 +1707,19 @@ global aur_updates debug_out filter filter_list find findtype group list_all lis
 			set list $list_outdated
 			puts $debug_out "filter - list set to list_outdated"
 		}
+		"not_required" {
+			set list $list_special
+			puts $debug_out "filter - list set to list_special"
+		}
 		"aur" {
 			set list $aur_updates
 			puts $debug_out "filter - list set to aur_updates"
 		}
 	}
 	
-	# now filter on any group selected
-	puts $debug_out "filter - now filter by group"
-	if {$group != "All"} {
-		puts $debug_out "filter - group is $group"
+	# now filter on any group selected unless we are in AUR which has no groups
+	if {$group != "All" && $filter != "aur"} {
+		puts $debug_out "filter - now filter by group $group"
 		foreach element $list {
 			set groups [split [lrange $element 4 4] ","]
 			foreach item $groups {
@@ -1720,7 +1756,6 @@ global debug_out filter filter_list find group list_show selected_list start_tim
 	puts $debug_out "filter checkbutton called by $button with command $command  - the title is set to $title ([expr [clock milliseconds] - $start_time])"
 
 	set error 0
-	set filter "none"
 	set filter_list ""
 	set group "All"
 	# lose any existing find command, selected groups, and/or messages for the special filters
@@ -1786,8 +1821,10 @@ global debug_out group list_all list_installed list_uninstalled listview_current
 	}
 	if {[llength $list_found] == 0} {
 		set_message find ""
+	} elseif {[llength $list_found] == 1} {
+		set_message find "Found \"$find\" in 1 package"
 	} else {
-		set_message find "Found [llength $list_found] packages"
+		set_message find "Found \"$find\" in [llength $list_found] packages"
 	}
 	update
 	# show the new list found, which replaces list_show with that list
@@ -1963,11 +2000,11 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 	.filter_list_aur_updates configure -text "AUR/Local Updates ([llength $filter_list])"
 	if {$messages != "" && $aur_messages == "true"} {
 		set ans [tk_messageBox -default yes -detail "Do you want to view the warning messages now?" -icon question -message "There are warning messages from the AUR/Local Updates." -parent . -title "Upgrade Warnings" -type yesno]
+		# don't show the message again
+		set aur_messages "false"
 		switch $ans {
-			no {set aur_messages "false"}
-			yes {
-				view_text "$messages" "AUR/Local Updates Messages"
-			}	
+			no {}
+			yes {view_text "$messages" "AUR/Local Updates Messages"}	
 		}
 	}
 	.wp.wfone.listview configure -selectmode browse
@@ -2003,7 +2040,7 @@ global debug_out start_time
 
 proc get_configs {} {
 
-global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg icon_dir installed_colour outdated_colour  part_upgrade save_geometry set_part_upgrade terminal terminal_string
+global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg icon_dir installed_colour outdated_colour  part_upgrade save_geometry set_part_upgrade show_menu show_buttonbar terminal terminal_string
 # get the configuration previously saved
 
 	if [file exists "$config_file"] {
@@ -2029,6 +2066,8 @@ global aur_all browser buttons config_file editor geometry geometry_config geome
 			outdated_colour {set outdated_colour $var}
 			save_geometry {set save_geometry $var}
 			set_part_upgrade {set set_part_upgrade $var}
+			show_menu {set show_menu $var}
+			show_buttonbar {set show_buttonbar $var}
 			terminal {set terminal $var}
 			terminal_string {set terminal_string $var}
 		}
@@ -2434,13 +2473,13 @@ global debug_out list_groups start_time tmp_dir
 
 proc list_special {execute_string} {
 
-global debug_out filter list_all list_local start_time tmp_dir
+global debug_out filter list_all list_local list_special start_time tmp_dir
 # get a list of requested packages
 # element, item, list, paclist, tmp_list, values - are temporary local variables
 # returns list as Repo Package Version Available(na) Group(s) Description
 
 	puts $debug_out "list_special - called to execute $execute_string ([expr [clock milliseconds] - $start_time])"
-	set list ""
+	set list_special ""
 	set paclist ""
 	set tmp_list ""
 
@@ -2494,10 +2533,10 @@ global debug_out filter list_all list_local start_time tmp_dir
 	puts $debug_out "\tnow get the details for each of the packages found"
 	foreach element $paclist {
 		set values [lindex $list_all [lsearch $tmp_list $element]]
-		lappend list $values
+		lappend list_special $values
 	}
 	puts $debug_out "list special finished - now call list_show ([expr [clock milliseconds] - $start_time])"
-	list_show [lsort -dictionary -index 1 $list]
+	list_show [lsort -dictionary -index 1 $list_special]
 	return 0
 }
 
@@ -2566,7 +2605,8 @@ global debug_out list_show list_show_ids listview_selected_in_order message part
 		}
 		# if the item was previously selected then select it again
 		# this selection will call bind again, so we will need to completely rewrite listview_selected_in_order
-		# and save the id of the item if it is in the new list in the same order
+		# and save the id of the item, if it is in the new list, in the same order
+		# so new_listview_selected will include all the items proviously selected from this list
 		set index [lsearch $listview_selected_names [lrange $element 1 1]]
 		if {$index != -1} {
 			lappend new_listview_selected "$index $id"
@@ -2587,11 +2627,13 @@ global debug_out list_show list_show_ids listview_selected_in_order message part
 		puts $debug_out "list_show - there are no selections"
 		# we have just shown a new list and nothing is selected, so reset the menu entries
 		set_message selected ""
+		.menubar.edit entryconfigure 0 -state normal
 		.menubar.edit entryconfigure 1 -state disabled
 		.menubar.tools entryconfigure 1 -state disabled
 		.menubar.tools entryconfigure 2 -state disabled
 		.listview_popup entryconfigure 1 -state disabled
 		.listview_popup entryconfigure 2 -state disabled
+		.listview_popup entryconfigure 3 -state normal
 		.listview_popup entryconfigure 4 -state disabled
 		if {[llength $list] == 0} {
 			# and nothing is listed
@@ -2618,7 +2660,7 @@ global debug_out list_show list_show_ids listview_selected_in_order message part
 
 proc put_configs {} {
 
-global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg icon_dir installed_colour outdated_colour save_geometry set_part_upgrade terminal terminal_string
+global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg icon_dir installed_colour outdated_colour save_geometry set_part_upgrade show_menu show_buttonbar terminal terminal_string
 # save the configuration data
 
 	set fid [open "$config_file" w ]
@@ -2648,6 +2690,10 @@ global aur_all browser buttons config_file editor geometry geometry_config geome
 	if {$save_geometry != "yes"} {set $save_geometry "no"}
 	puts $fid "save_geometry $save_geometry"
 	puts $fid "set_part_upgrade $set_part_upgrade"
+	if {$show_menu != "no"} {set $show_menu "yes"}
+	puts $fid "show_menu $show_menu"
+	if {$show_buttonbar != "no"} {set $show_buttonbar "yes"}
+	puts $fid "show_buttonbar $show_buttonbar"
 	puts $fid "terminal $terminal" 
 	puts $fid "terminal_string $terminal_string" 
 	close $fid 
@@ -2830,7 +2876,6 @@ global debug_out sync_time
 	if {[string length $days] == 1} {set days "0$days"}
 	set hours [expr int($e_time / 60 / 60) - ($days * 24)] 
 	set mins [expr round(($e_time / 60.0) - ($hours * 60) - ($days * 60 * 24))]
-	puts $debug_out "Minutes: [expr ($e_time / 60.0)] Rounded: [expr round($e_time / 60.0)]"
 	.filter_clock configure -text "${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end] "
 	update
 	# wait a minute
@@ -2842,15 +2887,18 @@ global debug_out sync_time
 
 proc set_images {} {
 	
-global buttons icon_dir
+global buttons debug_out icon_dir
 
 # Create images
 
+set error [catch {
+
 # Toolbar	
-	image create photo tools -file "$icon_dir/$buttons/configure.png"
 	image create photo delete -file "$icon_dir/$buttons/edit-delete.png"
 	image create photo install -file "$icon_dir/$buttons/dialog-ok-apply.png"
 	image create photo reload -file "$icon_dir/$buttons/edit-redo.png"
+	image create photo tools -file "$icon_dir/$buttons/configure.png"
+	image create photo upgrade -file "$icon_dir/$buttons/system-software-update.png"
 # Message Box
 	image create photo hint -file "$icon_dir/medium/help-hint.png"
 	image create photo warning -file "$icon_dir/medium/dialog-warning.png"
@@ -2860,6 +2908,11 @@ global buttons icon_dir
 	image create photo down_arrow -file "$icon_dir/tiny/pan-down-symbolic.symbolic.png"
 	image create photo pacman -file "$icon_dir/small/ark.png"
 	image create photo view -file "$icon_dir/small/view-list-text.png"
+}]
+
+puts $debug_out "set_images returned $error"
+
+return $error
 	
 }
 
@@ -2897,7 +2950,8 @@ proc set_wmdel_protocol {type} {
 		}
 	} else { 
 		wm protocol . WM_DELETE_WINDOW {
-		if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]; put_configs}
+		if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]}
+		put_configs
 		# delete the aur_upgrades directory and all of its contents
 		# any aur packages with incomplete downloads or upgrades will have to be restarted
 		set error [catch {file delete -force "$tmp_dir/aur_upgrades"} result]
@@ -2947,7 +3001,7 @@ global count_all count_installed count_uninstalled count_outdated debug_out list
 	# draw the screen now to make it appear as if it is loading faster and get the full list of packages
 	update
 	list_all
-	puts $debug_out "start _ list_all done, call count_lists ([expr [clock milliseconds] - $start_time])"
+	puts $debug_out "start - list_all done, call count_lists ([expr [clock milliseconds] - $start_time])"
 	count_lists
 	puts $debug_out "start - count_lists done, show counts ([expr [clock milliseconds] - $start_time])"
 	
@@ -3046,6 +3100,26 @@ global debug_out start_time
 	return "stable"
 }
 
+proc toggle_buttonbar {} {
+
+global show_buttonbar	
+# toggle the buttonbar on or off
+
+	if {[.menubar.view entrycget 5 -label] == "Hide Toolbar"} {
+		.menubar.view entryconfigure 5 -command {
+			grid .buttonbar -in . -row 2 -column 1 -columnspan 3 -sticky ew
+			set show_buttonbar "yes"
+			toggle_buttonbar
+		} -label "Show Toolbar" -state normal -underline 5
+	} else {
+		.menubar.view entryconfigure 5 -command {
+			grid remove .buttonbar 
+			set show_buttonbar "no"
+			toggle_buttonbar
+		} -label "Hide Toolbar" -state normal -underline 5
+	}
+}
+	
 proc update_cups {} {
 	
 global debug_out home message su_cmd
@@ -3398,12 +3472,29 @@ menu .menubar \
 		.menubar.view add command -command {read_news} -label "Latest News" -state normal -underline 0
 		.menubar.view add command -command {read_config} -label "Pacman Configuration" -state normal -underline 7
 		.menubar.view add command -command {read_log view} -label "Recent Pacman Log" -state normal -underline 0
+		.menubar.view add separator
+		.menubar.view add command -command {
+			. configure -menu ""
+			.listview_popup add separator
+			.listview_popup add command -label "Show Menu" -command {
+				. configure -menu .menubar
+				set show_menu "yes"
+				.listview_popup delete 5 6		
+			} -state normal
+			set show_menu "no"
+		} -label "Hide Menubar" -state normal -underline 5
+		.menubar.view add command -command {grid remove .buttonbar; toggle_buttonbar; set show_buttonbar "no"} -label "Hide Toolbar" -state normal -underline 5
 	menu .menubar.help -tearoff 0
 		.menubar add cascade -menu .menubar.help -label Help -underline 0
 			.menubar.help add command -command {view_text $help_text "Help"} -label "Help" -state normal -underline 0
 			.menubar.help add command -command {view_text $about_text "About"} -label "About" -state normal -underline 0
 
 frame .buttonbar 
+
+	button .buttonbar.upgrade_button \
+		-command {system_upgrade} \
+		-image upgrade \
+		-relief flat
 
 	button .buttonbar.reload_button \
 		-command {execute sync} \
@@ -3457,38 +3548,45 @@ frame .buttonbar
 			puts $debug_out "ButtonRelease on .buttonbar.label_find turned find validate on"
 			.buttonbar.entry_find configure -validate key
 			if {$find != ""} {filter}
-			puts $debug_out "Find type is $findtype"
+			puts $debug_out "Find type is $findtype (Find Name)"
 			.buttonbar.label_find configure -text "Find Name "
+			puts $debug_out "Find text set to Find Name"
 			balloon_set .buttonbar.entry_find "Find a package name in the list displayed"
 			focus .buttonbar.entry_find
 		} elseif {$findtype == "findname"} {
 			puts $debug_out "Find Name label clicked"
 			set findtype "findfile"
-			# keep the entry in the find field
+			# keep the entry from the find field
 			set findfile $find
+			# but forget it for the find/find name field
 			set find ""
 			.buttonbar.entry_find delete 0 end
+##
+			filter
 			puts $debug_out "ButtonRelease on .buttonbar.label_find turned find validate on"
 			.buttonbar.entry_find configure -validate key
-			if {$findfile != ""} {filter}
+##			if {$findfile != ""} {filter}
 			set_message find ""
-			puts $debug_out "Find type is $findtype"
+			puts $debug_out "Find type is $findtype (Find File)"
 			.buttonbar.label_find configure -text "Find File "
+			puts $debug_out "Find text set to Find File"
+			update
 			.buttonbar.clear_find_button configure -command {
 				set findfile ""
 				set_message find ""
-				filter
+##				filter
 			}
 			balloon_set .buttonbar.entry_findfile "Find the package in the list displayed\nwhich owns a file\n(enter the full path to the file name)" 
 			grid remove .buttonbar.entry_find
-			grid .buttonbar.entry_findfile -in .buttonbar -row 1 -column 8 \
+			grid .buttonbar.entry_findfile -in .buttonbar -row 1 -column 9 \
 				-sticky we
 			focus .buttonbar.entry_findfile
 		} elseif {$findtype == "findfile"} {
 			puts $debug_out "Find File label clicked"
 			set findtype "find"
 			set_message find ""
-			if {$find != ""} {filter}
+			filter
+##			if {$find != ""} {filter}
 			puts $debug_out "Find type is $findtype"
 			.buttonbar.label_find configure -text "Find "
 			.buttonbar.clear_find_button configure -command {
@@ -3498,7 +3596,7 @@ frame .buttonbar
 			}
 			balloon_set .buttonbar.entry_find "Find some data in the list displayed\n(excluding the Repository name)"
 			grid remove .buttonbar.entry_findfile
-			grid .buttonbar.entry_find -in .buttonbar -row 1 -column 8 \
+			grid .buttonbar.entry_find -in .buttonbar -row 1 -column 9 \
 				-sticky we
 			focus .buttonbar.entry_find
 		}
@@ -3514,7 +3612,7 @@ frame .buttonbar
 			# Backspace plus repeat key crashes the programme if the string is 2 characters or more
 			# so we need to update idletasks
 			update idletasks
-			puts $debug_out "Find string is %P"
+##			puts $debug_out "Find string is %P"
 			set find %P
 			if {[string length %P] == 0} {
 				set_message find ""
@@ -3525,12 +3623,12 @@ frame .buttonbar
 				} else {
 					find %P $filter_list all
 				}
-			}
-			# any error in the find script will turn off the validate command
-			# so we try to reinstate it here 
-			after idle {
-				puts $debug_out "after idle turned find validate on"
-				.buttonbar.entry_find configure -validate key
+				# any error in the find script will turn off the validate command
+				# so we try to reinstate it here 
+				after idle {
+					puts $debug_out "after idle turned find validate on"
+					.buttonbar.entry_find configure -validate key
+				}
 			}
 			return 1
 		} \
@@ -3656,11 +3754,11 @@ frame .buttonbar
 				list_show $pkglist
 			}
 			if {[llength $pkglist] == 0} {
-				set_message terminal "No packages found containing $findfile"
+				set_message terminal "No packages found containing \"$findfile\""
 			} elseif {[llength $pkglist] > 1} {
-				set_message terminal "[llength $pkglist] packages provide $findfile"
+				set_message terminal "[llength $pkglist] packages provide \"$findfile\""
 			} else {
-				set_message terminal "[llength $pkglist] package provides $findfile"
+				set_message terminal "[llength $pkglist] package provides \"$findfile\""
 			}
 			if {[string first "pacman" $command] == 0} {
 				.wp.wftwo.dataview select .wp.wftwo.dataview.info
@@ -3762,6 +3860,7 @@ frame .filters
 		-command {
 			update idletasks
 			set aur_only false
+			set filter "orphans"
 			filter_checkbutton ".filter_list_orphans" "pacman -b $tmp_dir -Qdtq" "Orphans"
 		} \
 		-onvalue "orphans" \
@@ -3772,6 +3871,7 @@ frame .filters
 		-command {
 			update idletasks
 			set aur_only false
+			set filter "not_required"
 			filter_checkbutton ".filter_list_not_required" "pacman -b $tmp_dir -Qtq" "Not Required"
 		} \
 		-onvalue "not_required" \
@@ -3797,6 +3897,7 @@ frame .filters
 		-command {
 			update idletasks
 			puts $debug_out "aur_all set to $aur_all"
+			set filter 0
 			if {$selected_list == "aur_updates"} {
 				get_aur_updates
 			}
@@ -4527,26 +4628,29 @@ ttk::notebook .wp.wftwo.dataview \
 	
 # Geometry management
 	
-	grid .buttonbar -in . -row 2 -column 1\
+	grid .buttonbar -in . -row 2 -column 1 \
 		-columnspan 3 \
 		-sticky ew
-		grid .buttonbar.reload_button -in .buttonbar -row 1 -column 1 \
+		grid .buttonbar.upgrade_button -in .buttonbar -row 1 -column 1 \
 			-sticky w
-		grid .buttonbar.install_button -in .buttonbar -row 1 -column 2 \
+		grid .buttonbar.reload_button -in .buttonbar -row 1 -column 2 \
 			-sticky w
-		grid .buttonbar.delete_button -in .buttonbar -row 1 -column 3 \
+		grid .buttonbar.install_button -in .buttonbar -row 1 -column 3 \
 			-sticky w
-		grid .buttonbar.label_message -in .buttonbar -row 1 -column 4 \
+		grid .buttonbar.delete_button -in .buttonbar -row 1 -column 4 \
+			-sticky w
+		grid .buttonbar.label_message -in .buttonbar -row 1 -column 5 \
 			-columnspan 3 \
 			-sticky we
-		grid .buttonbar.label_find -in .buttonbar -row 1 -column 7 \
+		grid .buttonbar.label_find -in .buttonbar -row 1 -column 8 \
 			-sticky e
-		grid .buttonbar.entry_find -in .buttonbar -row 1 -column 8 \
+		grid .buttonbar.entry_find -in .buttonbar -row 1 -column 9 \
 			-sticky we
-		grid .buttonbar.clear_find_button -in .buttonbar -row 1 -column 9 \
+		grid .buttonbar.clear_find_button -in .buttonbar -row 1 -column 10 \
 			-sticky e
-		grid .buttonbar.configure_button -in .buttonbar -row 1 -column 10 \
+		grid .buttonbar.configure_button -in .buttonbar -row 1 -column 11 \
 			-sticky e
+
 	grid .filters -in . -row 3 -column 1 \
 		-columnspan 1 \
 		-rowspan 3 \
@@ -4649,14 +4753,15 @@ ttk::notebook .wp.wftwo.dataview \
 	grid columnconfigure .buttonbar 1 -weight 0 -minsize 20 -pad 0
 	grid columnconfigure .buttonbar 2 -weight 0 -minsize 20 -pad 0
 	grid columnconfigure .buttonbar 3 -weight 0 -minsize 20 -pad 0
-	grid columnconfigure .buttonbar 4 -weight 2 -minsize 0 -pad 0
+	grid columnconfigure .buttonbar 4 -weight 0 -minsize 20 -pad 0
 	grid columnconfigure .buttonbar 5 -weight 2 -minsize 0 -pad 0
 	grid columnconfigure .buttonbar 6 -weight 2 -minsize 0 -pad 0
-	grid columnconfigure .buttonbar 7 -weight 0 -minsize 0 -pad 0
+	grid columnconfigure .buttonbar 7 -weight 2 -minsize 0 -pad 0
 	grid columnconfigure .buttonbar 8 -weight 0 -minsize 0 -pad 0
 	grid columnconfigure .buttonbar 9 -weight 0 -minsize 0 -pad 0
-	grid columnconfigure .buttonbar 10 -weight 0 -minsize 20 -pad 0
+	grid columnconfigure .buttonbar 10 -weight 0 -minsize 0 -pad 0
 	grid columnconfigure .buttonbar 11 -weight 0 -minsize 20 -pad 0
+	grid columnconfigure .buttonbar 12 -weight 0 -minsize 20 -pad 0
 
 	grid rowconfigure .filters 1 -weight 0 -minsize 10 -pad 10
 	grid rowconfigure .filters 2 -weight 0 -minsize 0 -pad 10
@@ -4691,11 +4796,31 @@ ttk::notebook .wp.wftwo.dataview \
 	grid rowconfigure .wp.wftwo 1 -weight 1 -minsize 0 -pad 0 
 	grid rowconfigure .wp.wftwo 2 -weight 0 -minsize 10 -pad 0
 
+# the menu bar is mapped, but remove it if we did not ask for it
+if {$show_menu == "no"} {
+	. configure -menu ""
+	.listview_popup add separator
+	.listview_popup add command -label "Show Menu" -command {
+		. configure -menu .menubar
+		set show_menu "yes"
+		.listview_popup delete 5 6	
+	} -state normal
+}
+# the button bar is mapped, but remove it if we did not ask for it
+if {$show_buttonbar == "no"} {
+	grid remove .buttonbar
+	.menubar.view entryconfigure 5 -command {
+			grid .buttonbar -in . -row 2 -column 1 -columnspan 3 -sticky ew
+			set show_buttonbar "yes"
+			toggle_buttonbar
+	} -label "Show Toolbar" -state normal -underline 5
+}
 
 # set balloon help
 
+balloon_set .buttonbar.upgrade_button "Perform a Full System Upgrade"
 balloon_set .buttonbar.reload_button "Synchronize the database" 
-balloon_set .buttonbar.install_button "Install, Re-install or Upgrade the selected items" 
+balloon_set .buttonbar.install_button "Install or Re-install the selected items" 
 balloon_set .buttonbar.delete_button "Delete the selected items" 
 balloon_set .buttonbar.label_find "Click here to change the type of search" 
 balloon_set .buttonbar.entry_find "Find some data in the list displayed\n(excluding the Repository name)" 
@@ -4727,7 +4852,13 @@ list_show $list_all
 set filter_list $list_all
 update
 puts $debug_out "Window display complete - update screen ([expr [clock milliseconds] - $start_time])"
+if {$su_cmd == ""} {
+	tk_messageBox -default ok -detail "Some commands cannot be run as root. Consider restarting as a standard user" -icon warning -message "Running vpacman as root is not recommended." -parent . -title "Warning" -type ok
+		
+} elseif {[string first "sudo" $su_cmd] == -1} {
+	tk_messageBox -default ok -detail "Some commands cannot be run without sudo access. Consider adding $env(USER) to the sudoers file." -icon warning -message "Running vpacman without sudo access." -parent . -title "Warning" -type ok
+}
+update
 list_groups
 test_system
-
 
