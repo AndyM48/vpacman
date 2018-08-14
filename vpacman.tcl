@@ -20,7 +20,7 @@
 # save any arguements passed to vpacman
 set args $argv
 # save the new version number
-set version "1.2.1"
+set version "1.2.2"
 
 # check for required programmes
 set required "pacman wmctrl"
@@ -335,20 +335,31 @@ if { [exec id -u] eq 0 } {
 # if not root then do we have sudo privileges without a password
 } else {
 	set error [catch {exec sudo -n true} result]
-	# the -n option is only needed to distinguish the su_cmd from the next one!
-	if {$error == 0} {set su_cmd "sudo -n"}
-	# or perhaps we can use sudo but still need a password
-	set error [catch {exec sudo -v} result]
-	if {[string first "may not run sudo on" $result] == -1} {set su_cmd "sudo"}
+	if {$error == 0} {
+		set su_cmd "sudo -n"
+		# the -n option is only needed to distinguish the su_cmd from the next one!
+	} else {
+		# or perhaps we can use sudo but still need a password
+		# sudo -v will either ask for a password or return
+		# immediately with a "may not run sudo" message.
+		# so try it
+		# if vpacman was run from a terminal the password request will still be on the screen!
+		# so remove the prompt with -p ""
+		set fid [open "| sudo -v -p \"\""]
+		# close the channel
+		set error [catch {close $fid} result]
+		# what was the result?
+		puts $debug_out "sudo -v was run with result $result"
+		if {[string first "may not run sudo on" $result] == -1} {set su_cmd "sudo"}
+		# otherwise just use the default
+	}
 }
+puts $debug_out "Test complete - su command is $su_cmd"
 # only certain commands will need elevated privileges. Since we are running all commands in a terminal session 
-# we can ask for a password in taht session if necessary.
+# we can ask for a password in that session if necessary
 # so there really is no need to use a graphical su command.
-## need to add a warning if trying to run vpacman as root. AUR installs won't work anyway.
 
-# OK just use the default
-
-puts $debug_out "User is $env(USER) - Home is $home -Config file is $config_file - Programme Directory is $program_dir - Su command is set to $su_cmd"
+puts $debug_out "User is $env(USER) - Home is $home - Config file is $config_file - Programme Directory is $program_dir - Su command is set to $su_cmd"
 
 # PROCEDURES
 
