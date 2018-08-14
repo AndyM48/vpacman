@@ -20,7 +20,7 @@
 # save any arguements passed to vpacman
 set args $argv
 # save the new version number
-set version "1.2.1"
+set version "1.2.2"
 
 # check for required programmes
 set required "pacman wmctrl"
