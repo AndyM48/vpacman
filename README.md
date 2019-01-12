@@ -1,5 +1,5 @@
 # vpacman
-A programme to view and manage the pacman database - built with Tcl/Tk
+A graphical front end to pacman and the AUR - built with Tcl/Tk
 
 This is a simple GUI programme to view, install and delete the packages available through Pacman and the Arch AUR.
 

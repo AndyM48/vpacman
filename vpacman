@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/sh
 
 help () {
 
@@ -6,10 +6,10 @@ echo "
 Usage:
 
 vpacman [OPTIONS]
-Run vpacman to View and Modify the pacman database.
+Run vpacman - a Graphical front end for pacman and the AUR.
 
 Options:
-	-d --debug	run in debug mode. Output is store in a file \" vpacman.debug\" in the users home folder.
+	-d --debug	run in debug mode. Output is saved to a file \" vpacman.debug\" in the users home folder.
 	-h --help	show this help. For extended help run vpacman and select Help > Help from the menu bar.
 "
 }

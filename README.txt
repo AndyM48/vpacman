@@ -3,7 +3,7 @@
 This is vpacman.tcl
 	
 
-View and modify the pacman database
+A graphical front end for pacman and the AUR.
 
 This programme is free software. It is distributed under the terms of the GNU General Public Licence version 3 or any later version. 
 		

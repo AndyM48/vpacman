@@ -1,6 +1,6 @@
 [Desktop Entry]
 Categories=System;Utility;
-Comment=View and Modify Pacman Database
+Comment=Graphical front end for pacman and the AUR
 Exec=/usr/bin/vpacman
 Icon=utilities-file-archiver.png
 Name=VPacman
