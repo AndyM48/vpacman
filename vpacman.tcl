@@ -2,7 +2,7 @@
 
 #	 This is Vpacman - a Graphical front end for pacman and the AUR
 #
-#    Copyright (C) 2018  Andrew Myers <andrew dot myers@wanadoo dot fr>
+#    Copyright (C) 2018 - 2019  Andrew Myers <andrew dot myers@wanadoo dot fr>
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -17,17 +17,17 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-if {"$tcl_platform(threaded)"} {
-	package require Thread
-	set threads true
-} else {
+set error [catch {package require Thread}]
+if {$error} {
 	set threads false
+} else {
+	set threads true
 }
 
 # save any arguments passed to vpacman
 set args $argv
 # save the new version number
-set version "1.3.0"
+set version "1.3.1"
 
 # check for required programmes
 set required "pacman wmctrl"
@@ -64,7 +64,7 @@ global config_file
 # ..configurable
 global browser buttons editor geometry geometry_view helpbg helpfg icon_dir installed_colour keep_log outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
 # ..variables
-global about_text after_id anchor args aur_all aur_files aur_messages aur_only aur_updates aur_versions backup_log bubble colours count_all count_installed count_outdated count_uninstalled dbpath dlprog files_upgrade filter filter_list find findfile find_message findtype fs_upgrade geometry_config group group_index help_text installed_colour known_browsers known_editors known_terminals list_all list_groups list_installed list_local list_local_ids list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order local_newer index message outdated_colour package_actions part_upgrade select selected_list selected_message start_time state su_cmd sync_time system_test threads tverr_message tverr_text upgrades upgrades_count version win_configx win_configy win_mainx win_mainy
+global about_text after_id anchor args aur_all aur_files aur_messages aur_only aur_updates aur_versions backup_log bubble colours count_all count_installed count_outdated count_uninstalled dbpath dlprog files_upgrade filter filter_list find findfile find_message findtype fs_upgrade geometry_config group group_index help_text installed_colour known_browsers known_editors known_terminals list_all list_groups list_installed list_local list_local_ids list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order local_newer index message one_time outdated_colour package_actions part_upgrade select selected_list selected_message start_time state su_cmd sync_time system_test threads times tverr_message tverr_text upgrade_time upgrades upgrades_count version win_configx win_configy win_mainx win_mainy
 
 # VARIABLES
 
@@ -197,9 +197,9 @@ This simple programme allows you to View the packages available in those pacman 
 
 The only dependencies are Pacman, TCL, TK, a terminal and Wmctrl. Pacman is always used to install, update, delete and synchronize the pacman packages and database. Therefore the entries in the pacman configuration file will always be respected.
 
-Note: Wmctl relies on the window title set for the terminal. In order to use konsole the profile must be set to use the window title set by the shell.
+Note: Wmctrl relies on the window title set for the terminal. In order to use konsole the profile must be set to use the window title set by the shell.
 
-Optional dependencies are Curl or Wget, a browser, an editor, Pacman-contrib, Pkgfile, Xwininfo.
+Optional dependencies are a browser, an editor, Pacman-contrib, Pkgfile, Xwininfo.
 
 <strong>Usage:</strong>
 
@@ -221,7 +221,7 @@ The main window consists of a menu bar, a toolbar, a set of filter and list opti
 			<lm3>Options > Change any of the configurable options for Vpacman. Allows for editing the configuration file manually, which could break Vpacman! In case of problems delete the configuration file \"~/.vpacman.config\" to return all the values to default.</lm3>
 	View:	<lm3>Latest News > Read the last year of news from archlinux.org</lm3> 
 			<lm3>Pacman Configuration > View the the pacman configuration file.</lm3> 
-			<lm3>Recent Pacman Log > Read the last 200 entries in the pacman log file.</lm3> 
+			<lm3>Recent Pacman Log > Read the last 5000 entries in the pacman log file.</lm3> 
 			<lm3>Hide Menubar > Hide the menu bar. Can be shown again using the right click menu in the Packages Window - see below.</lm3> 
 			<lm3>Hide/Show Toolbar > Hide or show the tool bar</lm3> 
 	Help:	<lm3>Help > This help message.</lm3>
@@ -268,22 +268,23 @@ The main window consists of a menu bar, a toolbar, a set of filter and list opti
 # list of known browsers
 set known_browsers [list chromium dillo epiphany falkon firefox opera qupzilla]
 # list of known terminals
-set known_terminals [list {gnome-terminal} {--title <title> -- <command>} {konsole} {--title <title> -e <command>} {lxterminal} {--title <title> -e <command>} {mate-terminal} {--title <title> -e <command>} {roxterm} {--title <title> -e <command>} {vte} {--name <title> --command <command>} {vte-2.91} {--name <title> --command <command>} {xfce4-terminal} {--title <title> -e <command>} {xterm} {-title <title> -e <command>}]
+set known_terminals [list {gnome-terminal} {--title <title> -- <command>} {konsole} {--title <title> -e <command>} {lxterminal} {--title <title> -e <command>} {mate-terminal} {--title <title> -e <command>} {qterminal} {-title <title> -e <command>} {roxterm} {--title <title> -e <command>} {vte} {--name <title> --command <command>} {xfce4-terminal} {--title <title> -e <command>} {xterm} {-title <title> -e <command>}]
 # list of known_editors
 set known_editors [list emacs nano vi vim]
 # the list of all the packages in the database, including locally installed packages in the form
-# Repo Package Version Available Group(s) Descrition
+# Repo Package Version Available Group(s) Description
 set list_all ""
 # the list of all the groups in the database in the form
 # Group
 set list_groups ""
-# the list of all the installed packages, including locally installed packages in the form
-# Repo Package Version Available Group(s) Descrition
+# the list of all the installed packages, excluding locally installed packages in the form
+# Repo Package Version Available Group(s) Description
 set list_installed ""
 # the list of locally installed packages in the form
-# Repo(local) Package Version Available(-na-) Group(s) Descrition
+# Repo(local) Package Version Available('-na-' while no known version available) Group('none') Description
 set list_local ""
-# the list of local packages with their list_all index and their list_show ids
+# the list of local packages with their list_all index and their list_show ids in the form
+# name, list_all id, list_show index, treeview id
 set list_local_ids ""
 # the list ofpackages which can be updated
 set list_outdated ""
@@ -313,7 +314,7 @@ set listview_current ""
 # the list of all the currently selected items in listview in the form
 # id
 set listview_selected ""
-# the list of all the currently selected items in listview
+# the list of all the currently selected items in listview, in the order selected, in the form
 # id
 set listview_selected_in_order ""
 # the list of all the currently selected items in listview in the order that they were selected in the form
@@ -323,6 +324,8 @@ set local_newer 0
 set index 0
 # message to be shown in the button bar near the top of the window
 set message ""
+# show message one_time
+set one_time "true"
 # list of updated packages which may require further actions
 set package_actions [list "linux" "Linux was updated, consider rebooting" "gutenprint" "Gutenprint was installed or updated, consider running Tools > Update cups" "pacman-mirrorlist" "Pacman-mirrorlist was updated, consider running Tools > Check Config Files for advice on how to update the mirrorlist"]
 # is it ok to run a partial upgrade- 0 no, 1 yes.
@@ -350,10 +353,14 @@ set system_test "stable"
 # default terminal
 set terminal ""
 # threads: is tcl threaded, true or false
+# a list of times returned by get_sync_times - sync_time and update_time
+set times ""
 # the treeview message to display of any errors have been found
 set tverr_message ""
 # A list of any potential errors found in the treeview selection in the format Index Message
 set tverr_text ""
+# the time of the last full system update
+set update_time ""
 # a list of any packages selected which are set to upgrade
 set upgrades ""
 # the number of packages selected which are set to upgrade
@@ -396,7 +403,7 @@ puts $debug_out "Test complete - su command is $su_cmd"
 # we can ask for a password in that session if necessary
 # so there really is no need to use a graphical su command.
 
-puts $debug_out "User is $env(USER) - Home is $home - Config file is $config_file - Programme Directory is $program_dir - Su command is set to $su_cmd"
+puts $debug_out "Version $version: User is $env(USER) - Home is $home - Config file is $config_file - Programme Directory is $program_dir - Su command is set to $su_cmd"
 
 # PROCEDURES
 
@@ -422,13 +429,13 @@ puts $debug_out "User is $env(USER) - Home is $home - Config file is $config_fil
 #		set aur_only to the value requested. Reset the list checkbutton titles. 
 # proc configurable
 # 	Set configurable variables to sane values
-# proc configurable_defaults
+# proc configurable_default
 # 	Initialize a configurable variable to the first item in the known variables list which is installed
 # proc configure
 #	Display a new window to allow the configurable variables to be changed. 
 #		Also allows the configuration file to be edited using the selected editor.
 # proc count_lists
-#	Count the number of items in the lists found by the list_ procedures
+#	Count the number of items in the lists found by the list_ procedures, inlcude list_licalcount in list_installed
 # proc execute {type} 
 #	Execute a command in the specified terminal depending on the type of action passed to the procedure (Install, Remove  or Sync)
 # proc execute_command {action command wait}
@@ -461,6 +468,10 @@ puts $debug_out "User is $env(USER) - Home is $home - Config file is $config_fil
 # proc get_file_mtime
 # 	Get the  last modified time for a set of files
 # proc get_sync_time
+#	If no terminal is configured or found in the known_terminals list, try to get a valid terminal and terminal_string
+# proc get_terminal
+#	get the terminal_string for a given terminal from the known_terminals list
+# proc get_terminal_string {terminal}
 #	Get the last sync time, the list of repositories and check that the temporary database is up to date.
 # proc get_win_geometry
 #	Get the geometry of the windows
@@ -522,6 +533,8 @@ puts $debug_out "User is $env(USER) - Home is $home - Config file is $config_fil
 #	Test, up to three times for an internet connection.
 # proc test_system
 #	called by thread test system to see if it appears to be in an unstable condition.
+# proc test_versions {installed available}
+#	test if the available version is newer or older than the installed version
 # proc toggle_buttonbar
 #	Toggle the menu entry to show or hide the buttonbar
 # proc trim_log
@@ -604,6 +617,9 @@ global debug_out filename list_local package win_mainx win_mainy
 	entry .aurinstall.package \
 		-borderwidth 0 \
 		-textvariable package 
+		
+	bind .aurinstall.package <Return> {.aurinstall.install invoke}
+	
 	label .aurinstall.browse_label \
 		-text "or browse to a file to install"
 	button .aurinstall.browse \
@@ -640,21 +656,14 @@ global debug_out filename list_local package win_mainx win_mainy
 					puts $debug_out "aur_install - install file $filename"
 					grab release .aurinstall
 					destroy .aurinstall
-					aur_upgrade $filename "local"
+					puts $debug_out "aur_install - call aur_upgrade with file \"$filename\" and type \"install\""
+					aur_upgrade $filename "install"
 				} elseif {$package != ""} {
 					puts $debug_out "aur_install - install package $package"
-					# is this a re-install?
-					set ans "ok"
-					set found [lsearch -nocase -index 1 -all -inline $list_local $package]
-					if {$found != "" && [lindex $found 2] == [lindex $found 3]} {
-						puts $debug_out "aur_install - $package exists in list_local and is already up to date"
-						set ans [tk_messageBox -default ok -detail "\nDo you want to re-install \"$package\"?" -icon info -message "\"$package\" is up to date." -parent . -title "Re-install \"$package\"" -type okcancel]
-					}	
-					if {$ans == "ok"} {
-						grab release .aurinstall
-						destroy .aurinstall
-						aur_upgrade $package "install"
-					}
+					grab release .aurinstall
+					destroy .aurinstall
+					puts $debug_out "aur_install - call aur_upgrade with package \"$package\" and type \"local\""
+					aur_upgrade $package "aur"
 				}
 			} \
 			-text "Install"
@@ -715,9 +724,12 @@ global debug_out filename list_local package win_mainx win_mainy
 
 proc aur_upgrade {package type} {
 
-global debug debug_out dlprog editor geometry listview_selected listview_selected_in_order program_dir save_geometry start_time su_cmd terminal_string tmp_dir	
+global aur_versions_TID debug debug_out dlprog editor geometry list_all list_local listview_last_selected listview_selected listview_selected_in_order program_dir save_geometry selected_list start_time su_cmd terminal_string threads tmp_dir	
 # download and install or upgrade a package from AUR/Local
-# known types are install, upgrade or local (for install local package)"
+# known types are: 
+#	upgrade (upgrade a selected AUR/Local package), only existing AUR packages can be upgraded - called by invoking .buttonbar.install_button with aur_only
+# 	install (install a local package from a filename), could apply to an install, upgrade or downgrade of any package - called by proc aur_install
+#	aur (install, reinstall or upgrade an AUR package) - called by proc aur_install
 
 # if the package directory exists then it may have been the result of an aborted upgrade from before
 # so we will leave the partial/completed upgrades until we close 
@@ -725,29 +737,195 @@ global debug debug_out dlprog editor geometry listview_selected listview_selecte
 
 # this may not work if we are running as root
 
-	puts $debug_out "aur_upgrade called to $type $package"
-	if {$type != "local"} {
-
-		# we need a download programme to install or upgrade an AUR packag
-		if {$dlprog == ""} {
-			puts $debug_out "aur_upgrade - No download programme installed - return Error"
-			return 1
+	puts $debug_out "aur_upgrade called with type \"$type\" and package \"$package\""
+	
+	set found ""
+	set available_version ""
+	set current_version ""
+	set install_version ""
+	set package_type "none"
+	set state "install"
+	
+	if {$type == "install"} {
+		# this is a local package to install so parse the filename and get the package name and the install version
+		set filename $package
+		set elements [split [file tail $package] "-"]
+		set arch [lindex $elements end]
+		set install_version [string map {\  -} [lrange $elements end-2 end-1]]
+		set package [file rootname [string map {\  -} [lrange $elements 0 end-3]]]
+		puts $debug_out "aur_upgrade - install $package using $filename"
+	}
+	
+	# does the package exist in list_local, if not does it exist in list_all
+	set found [lsearch -nocase -index 1 -all -inline $list_local $package] 
+	if {$found != ""} {
+		puts $debug_out "aur_upgrade - found $package in list_local"
+		# this is an AUR/Local package
+		set package_type "aur_local"
+	} else {
+		set found [lsearch -nocase -index 1 -all -inline $list_all $package]
+		if {$found != ""} {
+			puts $debug_out "aur_upgrade - found $package in list_all"
+			# this is a repository package
+			set package_type "repo"
 		}
+	}
+	# if the package exists then get its current version and available version
+	if {$found != ""} {
+		set found [split $found { }]
+		set available_version [lindex $found 3]
+		if {$type == "install"} {
+			set available_version $install_version
+		}
+		set current_version [lindex $found 2]
+		# note that the available version was set to "" in the string
+		if {$available_version != "\"\""} {
+### temporarily remove any *
+			set available_version [string trimleft $available_version {*}]
+###
+			puts $debug_out "aur_upgrade - $package has been installed"
+			set result [test_versions $current_version $available_version]
+			puts $debug_out "aur_upgrade - test_version returned $result"
+			switch $result {
+				same {
+					puts $debug_out "\tand is up to date"
+					set state "indate"
+				}
+				newer {
+					puts $debug_out "\tand is marked to upgrade"
+					set state "outdate"
+				}
+				older {
+					puts $debug_out "\tand the installed version is already newer"
+					set state "downdate"
+				}
+			}
+				
+		} else {
+			puts $debug_out "aur_upgrade - $package has not been installed"
+		}
+	} else {
+		puts $debug_out "aur_upgrade - $package is not in the installed aur/local packages or in the repos"
+	}
+	
+	puts $debug_out "aur_upgrade - now check the package_type \"$package_type\""	
+	switch $package_type {
+		"none" {
+			puts $debug_out "aur_upgrade - $type called for $package which is not in list_local or in the repos"
+			# could be installed if it is type "aur" and exists in AUR
+			# or if it is a local package of type "install"
+			# we can use get_aur_version to check that the package name exists in AUR
+			# check if the package exists in AUR
+			set result [get_aur_version $package]
+			set version [lindex $result 0]
+			set description [lindex $result 1]
+			if {$version == "" && $description == ""} {
+				puts $debug_out "aur_upgrade - $package not found in AUR"
+				if {$type != "install"} {
+					puts $debug_out "aur_upgrade - $package is not type $install - return error"
+					set_message terminal "ERROR - the package \"$package\" was not found in AUR"
+					after 5000 {set_message terminal ""}
+					return 1
+				}
+				puts $debug_out "aur_upgrade - $package is a local package to install"
+			}
+			puts $debug_out "aur_upgrade - ok - install $package"
+		}
+		"aur_local" {
+			puts $debug_out "aur_upgrade - $type called for $package which is already installed in list_local"
+			# type upgrade - will upgrade or reinstall which is fine (but can only apply to packages in AUR)
+			# type aur - will do the same as upgrade (can only apply to packages in AUR)
+			if {$type == "upgrade" || $type == "aur"} {
+				# check if the package exists in AUR
+				set result [get_aur_version $package]
+				set version [lindex $result 0]
+				set description [lindex $result 1]
+				if {$version == "" && $description == ""} {
+					puts $debug_out "aur_upgrade - $package not found in AUR"
+					set_message terminal "ERROR - the package \"$package\" was not found in AUR"
+					after 5000 {set_message terminal ""}
+					return 1
+				}
+				puts $debug_out "aur_upgrade - $type called for $package which exists in AUR"
+			}
+			# type install - could be an upgrade, downgrade or re-install of the package filename
+			puts $debug_out "aur_upgrade - ok - install $package"
+		}
+		"repo" {
+			puts $debug_out "aur_upgrade - $type called for $package which is $state and is already available in the repos"
+			# aur and upgrade types only apply to aur packages
+			# it is not wise to install a repo package here because it might break the system
+			# so we can only downdate a repo package at present
+			if {$type == "install" && $state == "downdate"} {
+				puts $debug_out "aur_upgrade - ok - install $package"
+			} else {
+				puts $debug_out "aur_upgrade - cannot - install or upgrade $package here, it is in the repos"
+				set ans [tk_messageBox -default ok -detail "\"$package\" cannot be installed or upgraded from here. Select All and Find the package in the list presented." -icon info -message "\"$package\" already exists in the repositories" -parent . -title "Install/Upgrade \"$package\"" -type ok]
+				return 1
+			}
+		}
+		
+	}
+	puts $debug_out "aur_upgrade - passed tests, check state of package $package (type is $type, state is $state)"
 
-		# we can use get_aur_version to check that the package name exists in AUR
-		set result [get_aur_version $package]
-		set version [lindex $result 0]
-		set description [lindex $result 1]
-		if {$version == "" && $description == ""} {
-			puts $debug_out "aur_upgrade - $package not found in AUR - return Error"
-			set_message terminal "ERROR - the package \"$package\" was not found in AUR"
-			after 5000 {set_message terminal ""}
-			return 1
+	set detail "\"$package\" is already installed"
+
+	switch $state {
+		indate {
+			# reinstalls have already been disallowed for package_types "repo"
+			set detail [concat $detail " and is up to date."]
+			set title "reinstall"
+		}
+		outdate {
+			# upgrades have already been disallowed for package_types "repo", and for package_types "aur" which are not found in AUR
+			set title "upgrade"
+		}
+		downdate {
+			set title "downgrade"
+		}
+		default {
+			# installs have already been disallowed for package_types "repo", and for package_types "aur" which are not found in AUR
+			set detail ""
+			set title "install"
 		}
 	}
 	
+	# do not ask for confirmation if the type is "upgrade" or this is a straight "install" where any false options have already been disallowed
+	if {($type != "upgrade" && $title != "install") || $title == "downgrade"} {
+		set message "Do you want to $title \"$package\"?"
+		if {$title == "downgrade"} {set detail [concat $detail " and is newer"]}
+		set ans [tk_messageBox -default yes -detail $detail -icon info -message $message -parent . -title "[string totitle $title] \"$package\"" -type yesno]
+		 
+		if {$ans == "no"} {
+			return 1
+		}
+	}
+
 	# Create a download directory in the tmp directory
+	puts $debug_out "aur_upgrade - make sure that $tmp_dir/aur_upgrades exists"
 	file mkdir "$tmp_dir/aur_upgrades"
+	
+	if {$type != "install" && [file isdirectory "$tmp_dir/aur_upgrades/$package"] == 1} {
+		# Unless this is install a filename then if the directory already exists, then the process has been run before.
+		# This could be fine as long as the package was not built.
+		puts $debug_out "aur_upgrade - WARNING - $tmp_dir/aur_upgrades/$package already exists"
+		# test for a pkg file, sort any files found and pick the last one 
+		set filename [lindex [lsort [glob -nocomplain -directory $tmp_dir/aur_upgrades/$package *.pkg.tar.xz]] end]
+		puts $debug_out "aur_upgrade - glob returned $filename"
+		if {$filename != ""} {
+			# this will cause a failure with "==> ERROR: A package has already been built."
+			puts $debug_out "aur_upgrade - WARNING - $filename already exists"
+			set ans [tk_messageBox -default yes -detail "Do you want to rebuild the package?\n   Answer Yes to continue\n   Answer No to reinstall $package" -icon warning -message "A package has already been built." -parent . -title "Warning" -type yesnocancel]
+		 
+			if {$ans == "yes"} {
+				file delete "$filename"
+			} elseif {$ans == "no"} {
+				set type "install"
+			} else {
+				return 1
+			}
+		}
+	}
 	
 	set logfile [find_pacman_config logfile]
 	set logfid [open $logfile r]
@@ -760,12 +938,11 @@ global debug debug_out dlprog editor geometry listview_selected listview_selecte
 	puts $debug_out "\tdelete $tmp_dir/vpacman.sh"
 	file delete "$tmp_dir/vpacman.sh"
 	
-	
 	puts $debug_out "\twrite new file $tmp_dir/vpacman.sh"
 	set fid [open "$tmp_dir/vpacman.sh" w]
 	puts $fid "#!/bin/sh"
 	puts $fid "cd \"$tmp_dir/aur_upgrades\""
-	if {$type != "local"} {
+	if {$type != "install"} {
 		# download the AUR file to install or upgrade
 		puts $fid "echo \"\nDownload $package snapshot\n\""
 		if {$dlprog == "curl"} {
@@ -803,22 +980,24 @@ global debug debug_out dlprog editor geometry listview_selected listview_selecte
 			puts $fid "fi"
 		}
 	} else {
-		puts $fid "echo -e \"\nInstalling $package using pacman -U  \n\""
+		puts $fid "echo -e \"\nInstalling $filename using pacman -U  \n\""
 		if {$su_cmd != "su -c"} {
-			puts $fid "$su_cmd pacman -U $package"
+			puts $fid "$su_cmd pacman -U $filename"
 		} else {
-			puts $fid "su -c \"pacman -U $package\""
+			puts $fid "su -c \"pacman -U $filename\""
 		}
 	}
 	if {$type == "upgrade"} {
 		set action "Upgrade AUR Package"
 		puts $fid "echo -ne \"\nUpgrade $package finished, press ENTER to close the terminal.\""
-	} elseif {$type == "install"} {
-		puts $fid "echo -ne \"\nInstall $package finished, press ENTER to close the terminal.\""
-		set action "Install AUR Package"
-	} else {
+	} elseif {$type == "aur" || $type == "install"} {
 		puts $fid "echo -ne \"\nInstall [string range [file tail $package] 0 [string first ".pkg.tar.xz" [file tail $package]]-1] finished, press ENTER to close the terminal.\""
 		set action "Install Local Package"
+	} elseif {$type == "reinstall"} {
+		puts $fid "echo -ne \"\nReinstall $package finished, press ENTER to close the terminal.\""
+		set action "Reinstall AUR Package"
+	} else {
+		
 	}
 	puts $fid "read ans"
 	puts $fid "exit" 
@@ -853,9 +1032,7 @@ global debug debug_out dlprog editor geometry listview_selected listview_selecte
 	# now tidy up
 	file delete "$tmp_dir/vpacman.sh"
 	set_message terminal ""
-	# remove any saved selections.
-	set listview_selected ""
-	set listview_selected_in_order ""
+	update
 	
 	# read the rest of the logfile
 	# writing the logfile should be quick this time because there should only be a few lines
@@ -863,6 +1040,21 @@ global debug debug_out dlprog editor geometry listview_selected listview_selecte
 	close $logfid
 	puts $debug_out "aur_upgrade - completed and logged these events ([expr [clock milliseconds] - $start_time]):"
 	puts $debug_out "$logtext"
+	if {$logtext == ""} {
+		puts $debug_out "aur_upgrade - nothing was logged so nothing happened - return"
+		return 1
+	}
+	
+	# switch to aur_updates if required (do we want to include all local packages as well?)
+	if {$package_type == "aur_local" || $package_type == "none"} {
+		puts $debug_out "aur_upgrade - $package is either AUR or local, so switch to AUR/Local if not already selected"
+		if {$selected_list != "aur_updates"} {
+			set selected_list "aur_updates"
+			set filter 0
+			get_aur_updates
+		}	
+	}
+
 	# now work out what we did
 	# all of the following are local variables
 	set count_upgrades 0
@@ -885,24 +1077,63 @@ global debug debug_out dlprog editor geometry listview_selected listview_selecte
 	
 	# and decide what is necessary to do 
 	set restart false
-	
-	if {[expr $count_upgrades + $count_downgrades + $count_installs + $count_reinstalls] != 0} {
-		puts $debug_out "\tInstall succeeded"
+	switch $state {
+		indate {
+			if {$count_reinstalls == 1} {
+				puts $debug_out "aur_upgrade - Reinstall succeeded"
+				set result "success"
+			} else {
+				puts $debug_out "aur_upgrade - Reinstall failed"
+				set result "failed"
+			}
+		}
+		outdate {
+			if {$count_upgrades == 1} {
+				puts $debug_out "aur_upgrade - Upgrade succeeded"
+				set result "success"
+			} else {
+				puts $debug_out "aur_upgrade - Upgrade failed"
+				set result "failed"
+			}
+		}
+		downdate {
+			if {$count_installs == 1} {
+				puts $debug_out "aur_upgrade - Downgrade succeeded"
+				set result "success"
+			} else {
+				puts $debug_out "aur_upgrade - Downgrade failed"
+				set result "failed"
+			}
+		}
+		default {
+			if {$count_installs == 1} {
+				puts $debug_out "aur_upgrade - Install succeeded"
+				set result "success"
+			} else {
+				puts $debug_out "aur_upgrade - Install failed"
+				set result "failed"
+			}
+		}
+		
+	}	
+
+	if {$state == "indate" || $type == "failed"} {
 		# the local database will still be up to date
 		# if we only did a reinstall then there is nothing to do
-		if {[expr $count_upgrades + $count_downgrades + $count_installs] != 0} {
-			# delete the contents from  listview, proc start will run and bind TreeviewSelect
-			# will update all the variables when the selection changes
-			puts $debug_out "\tDelete listview contents"
-			.wp.wfone.listview delete [.wp.wfone.listview children {}]
-			update
-			# the counts and lists will need to be updated
-			set restart true
-		}
+	} else {
+		# the local database will need to be updated
+		# delete the contents from  listview, proc start will run and bind TreeviewSelect
+		# will update all the variables when the selection changes
+		puts $debug_out "\tDelete listview contents"
+		.wp.wfone.listview delete [.wp.wfone.listview children {}]
+		update
+		puts $debug_out "\tSet restart true"
+		# the counts and lists will need to be updated
+		set restart true
 	}
 	# check that vpacman was not updated, if it was then restart it
 	# it is not likely that it would be re-installed here (since it is running) but the upgrade may have been aborted
-	if {$package == "vpacman" && ($count_reinstalls == 1 || $count_upgrades == 1)} {
+	if {$package == "vpacman" && ($state == "indate" || $state == "outdate")} {
 		tk_messageBox -default ok -detail "vpacman will now restart" -icon info -message "vpacman was updated" -parent . -title "Further Action" -type ok
 		if {[string tolower $save_geometry] == "yes"} {set geometry [wm geometry .]; put_configs}
 		puts $debug_out "aur_upgrade - restart called after vpacman update"
@@ -917,15 +1148,28 @@ global debug debug_out dlprog editor geometry listview_selected listview_selecte
 
 	# now update all the lists if we need to
 	# if we did a local install using "pacman -U" then we do not know the result, so restart anyway
-	if {$restart || $type == "local"} { 
-		puts $debug_out "aur_upgrade - call start for type $type, restart is $restart"
+	if {$restart} { 
+		puts $debug_out "aur_upgrade - call start for type $type"
+		# start will rewrite .wp.wfone.treeview and reset listview_selected
+		# we need to remove the prior selection and the selection order
+		set listview_last_selected ""
+		set listview_selected_in_order ""
 		# call start
 		start
-		# and run the get_aur_versions to get the current aur_versions immediately
+		if {$threads && [test_internet] == 0} {
+			# now run the aur_versions thread to get the current aur_versions
+			puts $debug_out "Call aur_versions thread with main_TID, dlprog, tmp_dir and list_local ([expr [clock milliseconds] - $start_time])"
+			thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
+		}
 		get_aur_updates
 		filter
+	} else {
+		# otherwise just run filter
+		puts $debug_out "aur_upgrade - restart not required"
+		filter
 	}
-	# re-activate the sync button
+	# re-activate the upgrade and sync button
+	.buttonbar.upgrade_button configure -state normal
 	.buttonbar.reload_button configure -state normal
 	puts $debug_out "aur_upgrade command - completed ([expr [clock milliseconds] - $start_time])"
 }
@@ -1258,9 +1502,13 @@ proc clock_format {time format} {
 
 global debug_out
 
+	puts $debug_out "clock_format called for $format in timezone [exec date +%Z]"
+	puts $debug_out "clock format $time -format \"%d/%m/%y %H:%M\""
 	switch $format {
 		full {set format [clock format $time -format "%d/%m/%Y %H:%M"]}
+		short_full {set format [clock format $time -format "%d/%m/%y %H:%M"]}
 		date {set format [clock format $time -format "%d/%m/%Y"]}
+		short_date {set format [clock format $time -format "%d/%m/%y"]}
 		time {set format [clock format $time -format "%H:%M"]}
 	}
 
@@ -1270,7 +1518,7 @@ global debug_out
 proc configurable {} {
 # Set configurable variables to sane values
 
-global browser buttons debug_out editor geometry geometry_view helpfg helpbg icon_dir installed_colour keep_log known_browsers known_editors known_terminals outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
+global aur_all browser buttons debug_out editor geometry geometry_view helpfg helpbg icon_dir installed_colour keep_log known_browsers known_editors known_terminals one_time outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
 
 	puts $debug_out "Set configurable variables"
 	# initialize the browser variable to the first browser in the common browsers list which is installed
@@ -1279,6 +1527,9 @@ global browser buttons debug_out editor geometry geometry_view helpfg helpbg ico
 	configurable_default "editor" $known_editors
 	# initialize the terminal variables to the first terminal in the known terminals which is installed
 	configurable_default "terminal" $known_terminals 
+	
+	# do not show all aur/local packages
+	set aur_all false
 	# set the size of the icons used for the buttons
 	set buttons medium
 	# set the icon directory
@@ -1295,6 +1546,10 @@ global browser buttons debug_out editor geometry geometry_view helpfg helpbg ico
 	set helpfg #FFFFFF
 	set installed_colour blue
 	set outdated_colour red
+	# set the number of days to keep in the log file
+	set keep_log 31
+	# set the show message one_time to false
+	set one_time false
 	# show the menu and/or toolbar - yes or no
 	set show_menu "yes"
 	set show_buttonbar "yes"
@@ -1307,6 +1562,8 @@ global browser debug_out editor terminal terminal_string
 	
 	puts $debug_out "configurable_default - check default for $variable"
 	if {$variable == "terminal"} {
+		set terminal ""
+		set terminal_string ""
 		foreach {programme string} $list {
 			set result [catch {exec which $programme}]
 			if {$result == 0} {
@@ -1314,17 +1571,28 @@ global browser debug_out editor terminal terminal_string
 				set terminal_string "$programme $string"
 				break
 			}
-		}	
-		return 0
-	}
-	foreach programme $list {
-		set result [catch {exec which $programme}]
-		if {$result == 0} {
-			switch $variable {
-				browser {set browser "$programme"}
-				editor {set editor "$programme"}
+		}
+		puts $debug_out "configurable_default - terminal set to \"$terminal\""
+	} else {
+		if {$variable == "browser"} {
+			set browser ""
+		} else {
+			set editor ""
+		}
+		foreach programme $list {
+			set result [catch {exec which $programme}]
+			if {$result == 0} {
+				switch $variable {
+					browser {set browser "$programme"}
+					editor {set editor "$programme"}
+				}
+				break
 			}
-			break
+		}
+		if {$variable == "browser"} {
+			puts $debug_out "configurable_default - browser set to \"$browser\""
+		} else {
+			puts $debug_out "configurable_default - editor set to \"$editor\""
 		}
 	}
 	return 0
@@ -1426,17 +1694,14 @@ global browser buttons config_file debug_out editor geometry geometry_config geo
 		-values $tlist1 
 	# and set up bindings for when the value of the combobox changes
 	bind .config.terminal <Return> {
-		if {[lsearch $known_terminals $terminal] == -1} {
-			set terminal_string "$terminal --title <title> --command <command>"
-			puts $debug_out "configure - Terminal is $terminal - not a known terminal - String is $terminal_string"
-		}
+		set terminal_string [get_terminal_string $terminal]
+	}
+	bind .config.terminal <FocusOut> {
+		set terminal_string [get_terminal_string $terminal]
 	}
 	bind .config.terminal <<ComboboxSelected>> {
-		puts $debug_out "configure - the terminal selection has changed. Terminal is $terminal Index is [.config.terminal current] ([expr [.config.terminal current] * 2 + 1]) String is [lindex $known_terminals [expr [.config.terminal current] * 2 + 1]]"
-		set terminal_string "$terminal [lindex $known_terminals [expr [.config.terminal current] * 2 + 1]]"
-		focus .config.terminal_string
+		set terminal_string [get_terminal_string $terminal]
 	}
-	
 	label .config.terminal_string_label \
 		-text "Terminal String"
 	entry .config.terminal_string \
@@ -1507,19 +1772,22 @@ global browser buttons config_file debug_out editor geometry geometry_config geo
 				set tests 1
 			}
 			if {[catch {exec which $terminal}] == 1} {
-				tk_messageBox -default ok -detail "\"$terminal\" is not installed" -icon warning -message "Choose a different terminal" -parent . -title "Incorrect Option" -type ok 
+				if {$terminal == ""} {set detail "No terminal is installed"} else {set detail "\"$terminal\" is not installed"}
+				tk_messageBox -default ok -detail "$detail" -icon warning -message "Choose a different terminal" -parent . -title "Incorrect Option" -type ok 
 				focus .config.terminal
 				set tests 1
 			}
-			if {[string first "<title>" $terminal_string] == -1} {
-				tk_messageBox -default ok -detail "The terminal string must include provision for a window title. Use the string <title> to indicate its position in the string. Look at the examples of known terminal strings by selecting a terminal from the drop down list." -icon warning -message "\"$terminal_string\" has no title" -parent . -title "Incorrect Option" -type ok 
-				focus .config.terminal_string
-				set tests 1
-			}
-			if {[string first "<command>" $terminal_string] == -1} {
-				tk_messageBox -default ok -detail "The terminal string must include provision for a command to execute. Use the string <command> to indicate its position in the string. Look at the examples of known terminal strings by selecting a terminal from the drop down list."  -icon warning -message "\"$terminal_string\" has no command" -parent . -title "Incorrect Option" -type ok 
-				focus .config.terminal_string
-				set tests 1
+			if {$terminal != ""} {
+				if {[string first "<title>" $terminal_string] == -1} {
+					tk_messageBox -default ok -detail "The terminal string must include provision for a window title. Use the string <title> to indicate its position in the string. Look at the examples of known terminal strings by selecting a terminal from the drop down list." -icon warning -message "\"$terminal_string\" has no title" -parent . -title "Incorrect Option" -type ok 
+					focus .config.terminal_string
+					set tests 1
+				}
+				if {[string first "<command>" $terminal_string] == -1} {
+					tk_messageBox -default ok -detail "The terminal string must include provision for a command to execute. Use the string <command> to indicate its position in the string. Look at the examples of known terminal strings by selecting a terminal from the drop down list."  -icon warning -message "\"$terminal_string\" has no command" -parent . -title "Incorrect Option" -type ok 
+					focus .config.terminal_string
+					set tests 1
+				}
 			}
 			if {[lsearch $colours $installed_colour] == -1 && [regexp -indices ^#\[A-Fa-f0-9\]\{6\}$ $installed_colour] == 0} {
 				tk_messageBox -default ok -detail "\"$installed_colour\" is not a recognised colour" -icon warning -message "Choose a different colour for the installed packages" -parent . -title "Incorrect Option" -type ok 
@@ -1690,7 +1958,7 @@ global browser buttons config_file debug_out editor geometry geometry_config geo
 
 proc count_lists {} {
 
-global count_all count_installed count_outdated count_uninstalled debug_out list_all list_installed list_outdated list_uninstalled
+global count_all count_installed count_outdated count_uninstalled debug_out list_all list_installed list_local list_outdated list_uninstalled
 # returns the count of all the lists 	
 
 	puts $debug_out "count_lists called"
@@ -1699,7 +1967,7 @@ global count_all count_installed count_outdated count_uninstalled debug_out list
 	set count_outdated 0
 	set count_uninstalled 0
 	set count_all [llength $list_all]	
-	set count_installed [llength $list_installed]	
+	set count_installed [expr [llength $list_installed]	 + [llength $list_local]]
 	set count_outdated [llength $list_outdated]
 	set count_uninstalled [llength $list_uninstalled]	
 	puts $debug_out "count_lists - All $count_all, Installed $count_installed, Outdated $count_outdated, Installed $count_installed"
@@ -1707,11 +1975,14 @@ global count_all count_installed count_outdated count_uninstalled debug_out list
 
 proc execute {type} {
 	
-global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter groups listview_selected listview_selected_in_order list_local list_show list_outdated message package_actions part_upgrade sync_time selected_list start_time su_cmd system_test terminal_string tmp_dir upgrades
+global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter groups listview_last_selected listview_selected listview_selected_in_order list_local list_show list_outdated message package_actions part_upgrade sync_time selected_list start_time su_cmd system_test terminal_string threads tmp_dir upgrades
 # local variable are action command execute_string list mapstate type
 # runs whatever we need to do in a terminal window
 
-	puts $debug_out "execute - called for $type - upgrades are $upgrades"
+	puts $debug_out "execute - called for $type - upgrades are \"$upgrades\""
+	# reload listview_selected in case treeview select has not yet run
+	set listview_selected [.wp.wfone.listview selection]
+
 	if {$type == "install" && $upgrades != ""} {
 		set unstable_text ""
 		set install_text "will be re-installed."
@@ -1745,6 +2016,7 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 	# disable the buttons, menu and popup entries, they will all be reset on the next treeview selection
 	# except for the sync button which is disable to stop random clicking on it while the
 	# terminal window is open. We will re-activate it at the end of this procedure.
+	.buttonbar.upgrade_button configure -state disabled
 	.buttonbar.reload_button configure -state disabled
 	.buttonbar.install_button configure -state disabled
 	.buttonbar.delete_button configure -state disabled
@@ -1752,26 +2024,37 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 	.menubar.tools entryconfigure 2 -state disabled
 	.listview_popup entryconfigure 1 -state disabled
 	.listview_popup entryconfigure 2 -state disabled
-			
+
 	foreach item $listview_selected {
-		catch {lappend list [lrange [.wp.wfone.listview item $item -values] 1 1]}
+		lappend list [lrange [.wp.wfone.listview item $item -values] 1 1]
 	}
 	
 	set logfile [find_pacman_config logfile]
 	set logfid [open $logfile r]
 	seek $logfid +0 end
 	puts $debug_out "execute - opened the pacman logfile ($logfile) and moved to the end of the file"
-	
+
 	if {$type == "install"} {
-		if {$aur_only == true} {
-			# pass execution to aur_upgrade with the package to update and stop executing this procedure
-			aur_upgrade $list "upgrade"
-			return 0
-		} else {
-			set action "Pacman Install/Upgrade packages"
-			set command "$su_cmd pacman -S $list"
-			if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -S $list\""}
+		# test if the version available, pacman -Ss, is not the version requested. If so abort with get a full system upgrade
+		set version [lrange [.wp.wfone.listview item $item -values] 2 2]
+		puts $debug_out "execute (install) - can $version be installed?"
+		set info [split [exec pacman -Si [lrange [.wp.wfone.listview item $item -values] 1 1]] "\n"]
+		puts $debug_out "execute (install) - $info"
+		set available [lsearch -inline -regex $info "Version         : *"]
+		if {[string first $version $available] == -1} {
+			puts $debug_out "execute (install) - Version $version is not available ($available)"
+			set ans [tk_messageBox -default ok -detail "The sync'ed database shows \"$available\" but $version is available. to instal $version select Full System Upgrade from the menus and then try again." -icon warning -message "Full System Upgrade needed." -parent . -title "Warning" -type ok]
+			# return the options to normal install
+			.buttonbar.upgrade_button configure -state normal
+			.buttonbar.reload_button configure -state normal
+			.buttonbar.install_button configure -state normal
+			.menubar.tools entryconfigure 1 -state normal
+			.listview_popup entryconfigure 1 -state normal
+			return 1
 		}
+		set action "Pacman Install/Upgrade packages"
+		set command "$su_cmd pacman -S $list"
+		if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -S $list\""}
 	} elseif {$type == "upgrade_all"} {
 			set action "Pacman Full System Upgrade"
 			set command "$su_cmd pacman -Syu"
@@ -1790,31 +2073,20 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 	
 	puts $debug_out "execute $action $command true"
 	execute_command "$action" "$command" "true"	
-
-	# remove any saved selections.
-	.wp.wfone.listview selection remove [.wp.wfone.listview selection]
-	set listview_selected ""
-	set listview_selected_in_order ""
-	# now delete the contents from  listview, we do this now because otherwise we have to look at the wrong
-	# contents until proc start or list_show completes
-	.wp.wfone.listview delete [.wp.wfone.listview children {}]
-	# and also delete the contents of dataview, it will be repopulated later
-	puts $debug_out "execute - remove contents of dataview"
-	get_dataview ""
-	update
 	# did we see any errors
 	if {[file exists $tmp_dir/errors]} {
 		set fid [open $tmp_dir/errors r]
 		set errorinfo [read $fid]
 		close $fid
 		file delete $tmp_dir/errors
-		puts $debug_out "execute - Error file text:\n$errorinfo"
+		puts $debug_out "execute - read error file, the error file text was:\n$errorinfo"
 		# check the errors found
 		if {[string first "unable to lock database" $errorinfo] != -1} {
 			set lck_dir $dbpath
 			if {$type == "sync"} {set lck_dir $tmp_dir}
-			tk_messageBox -message "Unable to lock database" -detail "If you're sure a package manager is not already\nrunning, you can remove $lck_dir/db.lck" -icon error -title "Sync - Update Failed" -type ok
+			tk_messageBox -message "Unable to lock database" -detail "If you're sure a package manager is not already\nrunning, you can remove ${lck_dir}db.lck" -icon error -title "Sync - Update Failed" -type ok
 		} elseif {[string first "error: target not found:" $errorinfo] != -1} {
+			# cannot get "target not found" if the database is locked, so use if elseif 
 			tk_messageBox -message "Target not found" -detail "Run Full System Update to update the live database and then try again." -icon error -title "Install Failed" -type ok
 		}
 	}
@@ -1849,6 +2121,21 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 	
 	puts $debug_out "execute - Synced $count_syncs, Upgraded $count_upgrades, Installed $count_installs, Reinstalled $count_reinstalls, Deleted $count_deletes"	
 	
+	# something happened so ...
+	if {[expr $count_syncs + $count_upgrades + $count_installs + $count_reinstalls + $count_deletes] != 0} {
+		# remove any saved selections.
+		.wp.wfone.listview selection remove [.wp.wfone.listview selection]
+		set listview_selected ""
+		set listview_selected_in_order ""
+		# now delete the contents from  listview, we do this now because otherwise we have to look at the wrong
+		# contents until proc start or list_show completes
+		.wp.wfone.listview delete [.wp.wfone.listview children {}]
+		# and also delete the contents of dataview, it will be repopulated later
+		puts $debug_out "execute - remove contents of dataview"
+		get_dataview ""
+		update
+	}
+
 	# and decide what is necessary to do 
 	set action_message ""
 	set lf ""
@@ -1882,6 +2169,8 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 			# nothing happened so there is nothing else to do
 		}
 	} elseif {$type == "upgrade_all"} {
+		.filter_upgrade configure -text [clock_format [lindex [get_sync_time] 1] short_full]
+
 		if {$count_syncs != 0 && $count_upgrades >= $count_selected} {
 			puts $debug_out "\tUpgrade all succeeded"
 			# remove any warning label and show the change immediately
@@ -1909,11 +2198,17 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 			}
 		}
 	} elseif {$type == "delete"} {
-		if {$count_deletes == $count_selected} {
-			puts $debug_out "\tDeletes succeeded"
+		if {$count_deletes != 0} {
+			# check that a configured programme was not deleted
+			test_configs
 			# the local database will still be up to date
 			# the counts and lists will need to be updated
 			set restart true
+		}
+		if {$count_deletes == $count_selected} {
+			puts $debug_out "\tDeletes succeeded"
+		} elseif {$count_deletes != 0} {
+			puts $debug_out "\tSome deletes failed"
 		} else {
 			puts $debug_out "\tDeletes failed"
 			# nothing happened so there is nothing to do
@@ -1925,7 +2220,7 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 			# stop the clock
 			after 60000 {}
 			# set the sync time
-			set sync_time [clock seconds]
+			set sync_time [lindex [get_sync_time] 0]
 			# and the clock
 			set_clock
 			set restart true
@@ -1963,7 +2258,7 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 					update
 				}
 			} else {
-				set sync_time [clock seconds]
+				set sync_time [lindex [get_sync_time] 0]
 				set_clock
 				# this can run too quickly so pause for two seconds
 				after 2000
@@ -1976,14 +2271,21 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 		puts $debug_out "execute - called the start procedure ([expr [clock milliseconds] - $start_time])"
 		# call start
 		start
-		# and run the aur_versions thread to get the current aur_versions
-		puts $debug_out "execute - call aur_versions thread with main_TID, dlprog, tmp_dir and list_local ([expr [clock milliseconds] - $start_time])"
-		thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
-		filter
+		if {$threads && [test_internet] == 0} {
+			# and run the aur_versions thread to get the current aur_versions
+			puts $debug_out "execute - call aur_versions thread with main_TID, dlprog, tmp_dir and list_local ([expr [clock milliseconds] - $start_time])"
+			thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
+		} else {
+			puts $debug_out "execute - cannot call aur_versions thread - threading not available"
+		}
+		
 		puts $debug_out "execute - completed the start procedure ([expr [clock milliseconds] - $start_time])"
-	
-	# selected_list is the list selection. If it is not 0 then run the required filter(_checkbutton)
-		if {$selected_list != 0} {
+		
+		# selected_list is the list selection. If it is 0 then just run filter
+		if {$selected_list == 0} {
+			filter
+		} else {
+			# selected_list is not 0 so run the required filter(_checkbutton)
 			switch $selected_list {
 				"orphans" {
 					filter_checkbutton ".filter_list_orphans" "pacman -b $tmp_dir -Qdtq" "Orphans"
@@ -1996,11 +2298,14 @@ global aur_only aur_updates aur_versions_TID dbpath debug_out dlprog filter grou
 				}
 			}
 		}
+		puts $debug_out "execute - completed the necessary filter procedure ([expr [clock milliseconds] - $start_time])"
 	} else {
-		# simply reshow the same list
-		list_show $list_show
+	# otherwise just run filter
+		puts $debug_out "execute - restart not required"
+		filter
 	}
-	# re-activate the sync button
+	# re-activate the upgrade and sync button
+	.buttonbar.upgrade_button configure -state normal
 	.buttonbar.reload_button configure -state normal
 	puts $debug_out "execute - completed"
 }
@@ -2066,7 +2371,7 @@ global debug_out message su_cmd terminal_string tmp_dir
 	# now tidy up
 	file delete "$tmp_dir/vpacman.sh"
 	set_message terminal ""
-	update idletasks
+	update
 	puts $debug_out "execute_command - completed"
 }
 	
@@ -2080,39 +2385,52 @@ global debug_out start_time
 	set mapstate "normal"
 	set count 0
 	puts $debug_out "execute_terminal_isclosed - called for window \"$action\""
+	set window_count 0
+	set window_list ""
+	# check once for xwininfo
+	if {[catch {exec which xwininfo}] != 0} {
+		puts $debug_out "execute_terminal_isclosed - xwininfo is not installed, using \[wm state\]"
+	}
 	while {true} {
 		incr count
-		# if xwininfo is installed then
-		if {[catch {exec which xwininfo}] == 0} {
+		# if xwininfo is installed then it will report faster than wm state so prefer it
+		if {[catch {exec which xwininfo}] == 10} {
 			# check, during the loop, if the main window has been minimised.
 			# if it is later maximised then redraw the window
 			set error 1
 			# run xwininfo until it does not return an error
 			while {$error != 0} {set error [catch {exec xwininfo -name $master -stats} state]}
 			set state [split $state \n]
-			if {[lsearch $state "  Map State: IsViewable"] != -1} {
-				if {$mapstate == "unmapped"} {
-					update
-					set mapstate "normal"
-				}
-			} else {
-				set mapstate "unmapped"
-			}
-			puts $debug_out "execute_terminal_isclosed - $master window is $mapstate"
+			if {[lsearch $state "  Map State: IsViewable"] != -1} {set state "normal"}
 		} else {
-			puts $debug_out "execute_terminal_isclosed - xwininfo is not installed"
+			set state [wm state .]
 		}
-		puts $debug_out "$ wmctl -l - [clock format [clock seconds] -format {%H:%M:%S}]"
+		if {$state == "normal"} {
+			if {$mapstate == "unmapped"} {
+				update
+				set mapstate "normal"
+			}
+		} else {
+			set mapstate "unmapped"
+		}
 		set error 1
 		set windows ""
 		# get a list of open windows from wmctrl with no errors
 		while {$error != 0} {set error [catch {exec wmctrl -l} windows]}
-		puts $debug_out "Window List: \n$windows"
-		if {[string first "$action" $windows] == -1} {
-			puts $debug_out "execute_terminal_isclosed - terminal window \"$action\" closed - break after $count loops"
-			break
+		if {$windows == $window_list} {
+			incr window_count
+		} else {
+			if {$window_count > 0} {
+				puts $debug_out "\tWindow list repeated $window_count time"
+			}
+			puts $debug_out "Window List: \n$windows"
+			set window_list $windows
+			if {[string first "$action" $windows] == -1} {
+				puts $debug_out "execute_terminal_isclosed - terminal window \"$action\" closed - break after $count loops"
+				break
+			}
 		}
-		puts $debug_out "execute_terminal_isclosed - terminal window \"$action\" is open (loop $count)- continue"
+		puts $debug_out "execute_terminal_isclosed - terminal window \"$action\" is open, state is $mapstate ($count)- continue"
 		update
 		# and wait a few milliseconds - note: this was set to 250 which seemed to be too fast?
 		after 500
@@ -2190,7 +2508,7 @@ global aur_updates debug_out filter filter_list find findtype group list_all lis
 		}
 		"aur" {
 			set list $aur_updates
-			puts $debug_out "filter - list set to [llength $aur_updates] aur_updates"
+			puts $debug_out "filter - list set to aur_updates"
 		}
 	}
 	
@@ -2218,7 +2536,7 @@ global aur_updates debug_out filter filter_list find findtype group list_all lis
 			find $find $filter_list all
 		}
 	} else {
-		puts $debug_out "filter - now show the list"
+		puts $debug_out "filter - now show the [llength $filter_list] items in filter_list"
 		# sort and show the list
 		set filter_list [sort_list $filter_list]
 		list_show $filter_list
@@ -2374,7 +2692,7 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 	set messages ""
 	
 	if {$aur_versions == ""} {
-		puts $debug_out "get_aur_updates - AUR Versions is blank"
+		puts $debug_out "get_aur_updates - aur_versions is blank"
 		# aur_versions is blank so the thread to fetch it did not complete - get it now
 		.filter_list_aur_updates configure -text "Searching ....."
 		update
@@ -2398,14 +2716,17 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 		# and reset aur_only
 		set aur_only true
 	}
+	puts $debug_out "get_aur_updates - aur_versions is available"
 	# now just check for any errors and find the updates
 	set find_string false
+	puts $debug_out "get_aur_updates - find the details of each list_local package"
 	foreach line $list_local {
 		set element ""
 		set name [lindex $line 1]
 		set version [lindex $line 2]
 		set available [lindex $line 3]
 		set index [lsearch $aur_versions $name]
+		# if this is a local file with no aur version
 		if {$available == "-na-"} {
 			set messages [append messages "Warning: $name was not found in the AUR packages\n"]
 			if {$aur_all} {
@@ -2417,22 +2738,14 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 			} else {
 				# has the version number changed
 				if {$version != $available} {
-					# check if this is a new version
-					set old_version [split [string trim "$version" "r"] ".-"]
-					set new_version [split [string trim "$available" "r"] ".-"]
-					set count 0
-					while {$count <= [llength $old_version]} {
-						if {[lindex $new_version $count] > [lindex $old_version $count]} {
-						# if the major element has increased then it is newer
-							set element $line
-							break
-						} elseif {[lindex $new_version $count] < [lindex $old_version $count]} {
-						# if the major element has decreased then it is older
-							break
-						} else {
-							incr count
-						}
-					}	
+					puts $debug_out "get_aur_versions - the version for $name is different - call test_versions"
+					set test [test_versions $version $available]
+					if {$test == "newer"} {
+						puts $debug_out "\tthe current installed version is older"
+						set element $line
+					} elseif {$test == "older"} {
+						puts $debug_out "\tthe current installed version is newer"
+					}
 				}
 			}
 		}
@@ -2557,7 +2870,7 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 
 proc get_configs {} {
 
-global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg icon_dir installed_colour keep_log outdated_colour  part_upgrade save_geometry show_menu show_buttonbar terminal terminal_string
+global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg icon_dir installed_colour keep_log one_time outdated_colour  part_upgrade save_geometry show_menu show_buttonbar terminal terminal_string
 # get the configuration previously saved
 
 	if [file exists "$config_file"] {
@@ -2581,6 +2894,7 @@ global aur_all browser buttons config_file editor geometry geometry_config geome
 			icon_directory {set icon_dir $var}
 			installed_colour {set installed_colour $var}
 			keep_log {set keep_log $var}
+			one_time {set one_time $var}
 			outdated_colour {set outdated_colour $var}
 			save_geometry {set save_geometry $var}
 			show_menu {set show_menu $var}
@@ -2830,19 +3144,16 @@ global debug_out
 
 proc get_sync_time {} {
 	
-global dbpath debug_out list_repos start_time tmp_dir
-# check last modified times for each pacman database 
-# and get a list of repos at the same time
+global dbpath debug_out start_time tmp_dir
+# check last modified times for the pacman database 
 # check that the temporary sync database exists
 
-	set list_repos ""
+	puts $debug_out "get_sync_time called"
 	set sync_mtime 0
 	set sync_dbs [glob -nocomplain "$dbpath/sync/*.db"]
-	foreach item $sync_dbs {
-		if {[file mtime $item] > $sync_mtime} {set sync_mtime [file mtime $item]}
-		set list_repos [concat $list_repos [file rootname [file tail $item]]]
-	}
-	set list_repos [lsort $list_repos]
+	# get the last sync time from the sync directory timestamp
+	set sync_mtime [file mtime "$dbpath/sync"]
+	puts $debug_out "get_sync_time - last update $sync_mtime"
 	# check if the tmp database copy is older than the sync database, and update or create it as necessary
 	if {[file isdirectory $tmp_dir/sync]} {
 		# update_db will create the copy of the sync directory if necessary and copy the contents from the pacman DBPath
@@ -2852,7 +3163,73 @@ global dbpath debug_out list_repos start_time tmp_dir
 		update_db
 	}
 	# now return the tmp directory sync time
-	return [file mtime $tmp_dir/sync]
+	return [list [file mtime $tmp_dir/sync] $sync_mtime]
+}
+
+proc get_terminal {} {
+
+global debug_out start_time su_cmd terminal terminal_string
+# no terminal is configured or found in the known_terminals list, try to get a valid terminal and terminal_string
+	
+	set ans [tk_messageBox -default yes -detail "Do you want to install xterm now?\n\t(recommended)\nIf not then go to Tools > Options and enter a terminal and a valid terminal string." -icon warning -message "Vpacman requires a known terminal to function." -parent . -title "No known terminal found" -type yesno]
+
+	if {$ans == "yes"} {
+		if {[test_internet] == 0} {
+			# try to install xterm
+			puts $debug_out "get_terminal - try to install xterm terminal ([expr [clock milliseconds] - $start_time])"
+			set error 1
+			if {$su_cmd == "sudo -n"} {
+				set error [catch {eval [concat exec $su_cmd pacman --noconfirm -S xterm]} result]
+			} elseif {[catch {exec which pkexec}] == 0} {
+				set error [catch {eval [concat exec pkexec pacman --noconfirm -S xterm]} result]
+			}
+			# not sure why the above returns 1 even when the install is successful so check for xterm instead
+			if {[catch {exec which xterm}] == 1} {
+				puts $debug_out "get_terminal - install xterm failed error $error and result $result"
+			} else {
+				puts $debug_out "get_terminal - installed xterm"
+				set terminal "xterm"
+				set terminal_string "xterm -title <title> -e <command>"
+				# installed xterm so update the lists
+				puts $debug_out "get_terminal - now call start"
+				start
+				filter
+			}	
+		}	
+	}
+	# either the answer was no, or there was an error installing xterm
+	if {$terminal == ""} {
+		set terminal_string ""
+		configure 
+		# wait for the configure window to close
+		tkwait window .config
+		if {$terminal == ""} {
+			tk_messageBox -default ok -detail "Vpacman will exit now" -icon warning -message "Vpacman requires a known terminal to function." -parent . -title "No known terminal entered" -type ok
+			exit
+		}
+	}
+
+}
+
+proc get_terminal_string {terminal} {
+
+global debug_out known_terminals	
+# get the terminal_string for terminal from the known_terminals string
+	
+	puts $debug_out "get_terminal_string called for $terminal"
+	if {[lsearch $known_terminals $terminal] != -1} {
+		set terminal_string "$terminal --title <title> --command <command>"
+		puts $debug_out "get_terminal_string - terminal is $terminal, String is $terminal_string"
+	} else {
+		set terminal_string "$terminal "
+		focus .config.terminal_string
+		.config.terminal_string icursor end
+		puts $debug_out "get_terminal_string - terminal is $terminal - not a known terminal"
+	}	
+	.config.terminal selection clear
+	.config.terminal_string selection clear
+	puts $debug_out "get_terminal_string completed and returned $terminal_string"
+	return $terminal_string
 }
 
 proc get_win_geometry {} {
@@ -2977,7 +3354,6 @@ global debug_out list_all list_local list_local_ids list_installed list_outdated
 		set index [lsearch $list_all $element]
 		set list_local_ids [lappend list_local_ids [list [lindex $element 1] $index]]
 	}
-
 }
 
 proc list_groups {} {
@@ -3139,26 +3515,16 @@ global debug_out list_local_ids list_show list_show_ids listview_selected_in_ord
 				# there are no special tests for an "r" in the versions
 				# if the two versions are not the same
 				if {[lrange $element 2 2] != [lrange $element 3 3]} {
-					# find which is newer
-					set old_version [split [string trim [lrange $element 2 2] "r"] ".-"]
-					set new_version [split [string trim [lrange $element 3 3] "r"] ".-"]
-					set count 0
-					while {$count <= [llength $old_version]} {
-						if {[lindex $new_version $count] > [lindex $old_version $count]} {
-						# if the major element has increased then it is newer
-							.wp.wfone.listview tag add outdated $id
+					set test [test_versions [lrange $element 2 2] [lrange $element 3 3]]
+					if {$test == "newer"} {
+						.wp.wfone.listview tag add outdated $id
 ### temporarily add an asterix to the new version number
 .wp.wfone.listview item $id -values [lreplace $element 3 3 "*[lrange $element 3 3]"]
 ###
-							break
-						} elseif {[lindex $new_version $count] < [lindex $old_version $count]} {
-						# if the major element has decreased then it is older
-							.wp.wfone.listview tag add installed $id
-							break
-						} else {
-							incr count
-						}
-					}	
+					} elseif {$test == "older"} {
+						# the available versions seems to be older, but just mark it as installed for now
+						.wp.wfone.listview tag add installed $id
+					}
 				} else {
 					.wp.wfone.listview tag add installed $id
 				}
@@ -3236,7 +3602,7 @@ global aur_files debug_out start_time
 
 proc put_aur_versions {versions} {
 	
-global aur_all aur_versions debug_out filter_list list_all list_local list_local_ids list_show local_newer start_time
+global aur_all aur_versions debug_out filter filter_list find group list_all list_local list_local_ids list_show local_newer start_time
 # put the version and description found for a local package into list_all list_show list_local and treeview
 # this procedure is called by a thread
 	
@@ -3274,23 +3640,13 @@ global aur_all aur_versions debug_out filter_list list_all list_local list_local
 		set list_all [lreplace $list_all $list_all_index $list_all_index $element]
 		# check if this is an update
 		if {[lrange $element 2 2] != [lrange $element 3 3]} {
-			# find which is newer
-			set old_version [split [string trim [lrange $element 2 2] "r"] ".-"]
-			set new_version [split [string trim [lrange $element 3 3] "r"] ".-"]
-			set count 0
-			while {$count <= [llength $old_version]} {
-				if {[lindex $new_version $count] > [lindex $old_version $count]} {
-					set is_update true
-					puts $debug_out "put_aur_versions - this is an update"
-					incr local_newer
-					break
-				} elseif {[lindex $new_version $count] < [lindex $old_version $count]} {
-				# if the major element has decreased then it is older
-					break
-				} else {
-					incr count
-				}
-			}	
+			puts $debug_out "put_aur_versions - call test_versions"
+			set test [test_versions [lrange $element 2 2] [lrange $element 3 3]]
+			if {$test == "newer"} {
+				set is_update true
+				puts $debug_out "put_aur_versions - this is an update"
+				incr local_newer
+			}
 		}
 		# if there are four items in the list_local_ids then the element is included in list_show and the treeview
 		if {[llength [lindex $list_local_ids $index]] == 4} {
@@ -3319,6 +3675,12 @@ global aur_all aur_versions debug_out filter_list list_all list_local list_local
 	}
 	set list_local $aur_updates
 	# list_local should now be a clean list of all the local packages
+	puts $debug_out "put_aur_versions - filter is \"$filter\", group is \"$group\", find is \"$find\""
+	# if filter_list is still set to list_all at this point then update it
+	if {$filter == "all" && $group == "All" && $find == ""} {
+		set filter_list $list_all
+		puts $debug_out "put_aur_versions - filter_list set to list_all"
+	}
 	# now show the number of packages against AUR/Local Updates
 	if {$aur_all == true} {
 		puts $debug_out "put_aur_versions - configured text \"AUR/Local Updates ([llength $list_local])\""
@@ -3333,7 +3695,7 @@ global aur_all aur_versions debug_out filter_list list_all list_local list_local
 
 proc put_configs {} {
 
-global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg icon_dir installed_colour keep_log outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
+global aur_all browser buttons config_file editor geometry geometry_config geometry_view helpbg helpfg icon_dir installed_colour keep_log one_time outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
 # save the configuration data
 
 	set fid [open "$config_file" w ]
@@ -3360,6 +3722,7 @@ global aur_all browser buttons config_file editor geometry geometry_config geome
 	puts $fid "icon_directory $icon_dir"
 	puts $fid "installed_colour $installed_colour"
 	puts $fid "keep_log $keep_log"
+	puts $fid "one_time $one_time"
 	puts $fid "outdated_colour $outdated_colour"
 	if {$save_geometry != "yes"} {set $save_geometry "no"}
 	puts $fid "save_geometry $save_geometry"
@@ -3414,11 +3777,12 @@ global debug_out start_time
 	puts $debug_out "read_log - Logfile is $logfile"
 	
 	if {[file exists $logfile]} {
-		# calculate the size of the logfile in megabites to two decimal places
+		# calculate the size of the logfile in megabytes to two decimal places
+		# use MB = SI version and not MiB = binary calculation
 		set logsize [expr [expr [file size $logfile] / 10000] / 100.0]
 		puts $debug_out "read_log - Logfile is ${logsize} MB"
-		# read the last 200 lines of the logfile
-		set log_text [exec tail -200 $logfile]
+		# read the last 5000 lines of the logfile
+		set log_text [exec tail -5000 $logfile]
 		
 		if {$logsize > 1} {
 				set_message terminal "WARNING: the Pacman log ($logfile) is $logsize MB"
@@ -3561,7 +3925,7 @@ global browser debug_out dlprog home start_time
 
 proc set_clock {} {
 	
-global debug_out sync_time
+global debug_out start_time sync_time
 # work out the elapsed time since the last sync
 # calculate the minutes rounded up
 
@@ -3570,8 +3934,7 @@ global debug_out sync_time
 	if {[string length $days] == 1} {set days "0$days"}
 	set hours [expr int($e_time / 60 / 60) - ($days * 24)] 
 	set mins [expr round(($e_time / 60.0) - ($hours * 60) - ($days * 60 * 24))]
-	.filter_clock configure -text "${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end] "
-	update
+	.filter_clock configure -text "${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end]"
 	# wait a minute
 	after 60000 {
 		# if another programme has updated the database then we may not be in sync with
@@ -3700,7 +4063,7 @@ proc start {} {
 global aur_files_TID aur_versions_TID aur_versions count_all count_installed count_uninstalled count_outdated debug_out list_all list_local select start_time test_system_TID threads tmp_dir
 # this is the process to start the programme from scratch
 # or after an update is called	
-	
+
 	set aur_versions ""
 	puts $debug_out "start - called, call list_local ([expr [clock milliseconds] - $start_time])"
 	set select false
@@ -3753,11 +4116,9 @@ global aur_versions_TID debug_out dlprog filter find fs_upgrade list_local start
 		return 1
 	}
 	set fs_upgrade false
-	set sync_time [clock seconds]
-	set_clock
 	# call start
 	start
-	if {$threads} {
+	if {$threads && [test_internet] == 0} {
 		# and run the aur_versions thread to get the current aur_versions
 		puts $debug_out "system_upgrade - call aur_versions thread with main_TID, dlprog, tmp_dir and list_local ([expr [clock milliseconds] - $start_time])"
 		thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
@@ -3769,22 +4130,34 @@ global aur_versions_TID debug_out dlprog filter find fs_upgrade list_local start
 
 proc test_configs {} {
 	
-global browser debug_out editor known_browsers known_editors known_terminals start_time terminal 
+global browser debug_out editor known_browsers known_editors known_terminals one_time start_time terminal 
 # Test for sane configuration options
 
 	puts $debug_out "test_configs - called ([expr [clock milliseconds] - $start_time])"
-	set tests 0
+	set_message terminal ""
+	puts $debug_out "test_configs - test browser \"$browser\""
 	if {$browser != "" && [catch {exec which $browser}] == 1} {
-		tk_messageBox -default ok -detail "\"$browser\" is configured but is not installed" -icon warning -message "The browser has been reset" -parent . -title "Incorrect Option" -type ok 
+		tk_messageBox -default ok -detail "\"$browser\" is configured but is not installed" -icon warning -message "The browser will be reset" -parent . -title "Incorrect Option" -type ok 
 		configurable_default browser $known_browsers
 	}
+	puts $debug_out "test_configs - test editor \"$editor\""
 	if {$editor != "" && [catch {exec which [lindex $editor 0]}] == 1} {
-		tk_messageBox -default ok -detail "\"[lindex $editor 0]\" is configured but is not installed" -icon warning -message "The editor has been reset" -parent . -title "Incorrect Option" -type ok 
+		tk_messageBox -default ok -detail "\"[lindex $editor 0]\" is configured but is not installed" -icon warning -message "The editor will be reset" -parent . -title "Incorrect Option" -type ok 
 		configurable_default editor $known_editors
 	}
-	if {[catch {exec which $terminal}] == 1} {
-		tk_messageBox -default ok -detail "\"$terminal\" is configured but is not installed" -icon warning -message "The terminal has been reset" -parent . -title "Incorrect Option" -type ok 
+	puts $debug_out "test_configs - test terminal \"$terminal\""
+	if {$terminal != "" && [catch {exec which $terminal}] == 1} {
+		tk_messageBox -default ok -detail "\"$terminal\" is configured but is not installed" -icon warning -message "The terminal will be reset" -parent . -title "Incorrect Option" -type ok 
 		configurable_default terminal $known_terminals
+	} 
+	# the terminal must exist
+	if {$terminal == ""} {
+		set_message terminal "Error: A terminal is required"
+		get_terminal
+	}
+	if {$terminal == "konsole" && $one_time == "true"} {
+		tk_messageBox -default ok -detail "Wmctl relies on the window title set for the terminal. In order to use konsole the profile must be set to use the window title set by the shell.\nSet Tab title format to \"%w\"" -icon warning -message "The terminal emulator \"$terminal\" has been selected" -parent . -title "Changed terminal emulator" -type ok
+		set one_time "false"
 	}
 	puts $debug_out "test_configs - completed ([expr [clock milliseconds] - $start_time])"
 }
@@ -3832,6 +4205,29 @@ global debug_out start_time system_test
 	puts $debug_out "\tThe system is $result ([expr [clock milliseconds] - $start_time])"
 	set system_test $result
 	return "$result"
+}
+
+proc test_versions {installed available} {
+	
+global debug_out
+# test if the available version is newer or older the installed version
+
+	puts $debug_out "test_versions called for installed $installed and available $available"
+	set old_version [split [string trim $installed "r"] ".-"]
+	set new_version [split [string trim $available "r"] ".-"]
+	set count 0
+	while {$count <= [llength $old_version]} {
+		if {[lindex $new_version $count] > [lindex $old_version $count]} {
+			puts $debug_out "test_versions - this is an update"
+			return "newer"
+		} elseif {[lindex $new_version $count] < [lindex $old_version $count]} {
+			# if the major element has decreased then it is older
+			return "older"
+		} else {
+			incr count
+		}
+	}
+	return "same"	
 }
 
 proc toggle_buttonbar {} {
@@ -4383,15 +4779,16 @@ file link $tmp_dir/local $dbpath/local
 # check last modified times for each pacman database 
 # and get a list of repos at the same time
 # check that the temporary sync database exists
-set sync_time [get_sync_time]
-# test the current configuration options
-test_configs
+set times [get_sync_time]
+set sync_time [lindex $times 0]
+set update_time [lindex $times 1]
 puts $debug_out "Post configuration file: browser set to \"$browser\", editor set to \"$editor\", terminal set to \"$terminal\" ([expr [clock milliseconds] - $start_time])"
 
 # WINDOW
 
 # Set up screen
 
+puts $debug_out "Start Window set up - ([expr [clock milliseconds] - $start_time])"
 wm title . "Vpacman"
 wm iconphoto . -default pacman
 wm geometry . $geometry
@@ -4468,7 +4865,14 @@ frame .buttonbar
 		-relief flat
 
 	button .buttonbar.install_button \
-		-command {execute install}\
+		-command {
+			if {$aur_only} {
+				puts $debug_out ".buttonbar.install_button call aur_upgrade [lrange [.wp.wfone.listview item [.wp.wfone.listview selection] -values] 1 1] \"upgrade\""
+				aur_upgrade [lrange [.wp.wfone.listview item [.wp.wfone.listview selection] -values] 1 1] "upgrade"
+			} else {
+				execute install
+			}
+		}\
 		-image install \
 		-relief flat \
 		-state disabled
@@ -4596,7 +5000,20 @@ frame .buttonbar
 			return 1
 		} \
 		-width 25
-	
+		
+	# Do not allow Shift Left and Shift Right to create a selection
+	# if there are any problems reported then we may have to change the bindings for other keys
+	# Shift-Home, Shift-End, Shift-Button-1
+	bind .buttonbar.entry_find <Shift-Left> {
+		.buttonbar.entry_find icursor [expr [.buttonbar.entry_find index insert] - 1]
+		break
+	}
+
+	bind .buttonbar.entry_find <Shift-Right> {
+		.buttonbar.entry_find icursor [expr [.buttonbar.entry_find index insert] + 1]
+		break
+	}
+
 	bind .buttonbar.entry_find <Return> {
 		# run the find if return has been pressed, to find strings of less than 3 characters and reset the validate key
 		puts $debug_out "Return Key ran find $find"
@@ -4616,7 +5033,7 @@ frame .buttonbar
 	bind .buttonbar.entry_find <ButtonRelease> {+
 		.buttonbar.entry_find configure -validate key
 	}
-	
+
 # Alternate labels and entries to find a file instead of finding data in the current list
 
 	entry .buttonbar.entry_findfile \
@@ -4624,7 +5041,20 @@ frame .buttonbar
 		-takefocus 0 \
 		-textvariable findfile \
 		-width 25
-		
+
+	# Do not allow Shift Left and Shift Right to create a selection
+	# if there are any problems reported then we may have to change the bindings for other keys
+	# Shift-Home, Shift-End, Shift-Button-1
+	bind .buttonbar.entry_findfile <Shift-Left> {
+		.buttonbar.entry_findfile icursor [expr [.buttonbar.entry_findfile index insert] - 1]
+		break
+	}
+
+	bind .buttonbar.entry_findfile <Shift-Right> {
+		.buttonbar.entry_findfile icursor [expr [.buttonbar.entry_findfile index insert] + 1]
+		break
+	}
+
 	bind .buttonbar.entry_findfile <Return> {
 		if {$findfile != ""} {		
 			# reset the filter and group to all
@@ -4753,7 +5183,7 @@ frame .buttonbar
 
 		}
 	}
-	
+
 # set up display area
 
 frame .filters
@@ -4899,18 +5329,24 @@ frame .filters
 		
 	label .filter_warning \
 		-image warning
-			
+				
 	label .filter_clock_label \
 		-text "Time since last sync"
 		
 	label .filter_clock \
+		-text ""
+		
+	label .filter_upgrade_label \
+		-text "Last system upgrade"
+		
+	label .filter_upgrade \
 		-text ""
 
 # click on the displayed elapsed time to update it if necessary
 		
 	bind .filter_clock <ButtonRelease> {
 		puts $debug_out "Button clicked on filter_clock - update sync_time"
-		set sync_time [get_sync_time]
+		set sync_time [lindex [get_sync_time] 0]
 		set_clock
 	}
 	
@@ -5232,15 +5668,13 @@ frame .wp.wfone
 				foreach item $listview_selected {
 					incr count
 					puts $debug_out "\t$item is $count loop"
-### if the item no longer exists then this will throw an error
-### but how can we reach this point in this case? Should we catch the error
 					set listview_values [.wp.wfone.listview item $item -values]
 					puts $debug_out "TreeviewSelect - test next $item [lrange $listview_values 1 1]"
 # if the item has not been installed
 					if { [lrange $listview_values 3 3] == "{}"} {
 						# if the item has not been installed then we should install it
 						# not delete it
-						# local packages cannot be installed here, but will show "-na-" in the fourth field!
+						# local packages cannot be installed here, but will show something, version or "-na-", in the fourth field!
 						puts $debug_out "\t$item has not been installed"
 						if {$tverr_text == ""} {
 							set tverr_text [list $item "[lrange $listview_values 1 1] can only be installed"]
@@ -5366,7 +5800,7 @@ frame .wp.wfone
 							} elseif {[string first "delete" $state] != -1} {
 								puts $debug_out "$item is local and state includes delete"
 								set ans [tk_messageBox -default yes -detail "Do you want to continue selecting packages to delete, answer No to start a new selection" -icon warning -message "[lindex $listview_values 1] is a local package and can only be deleted from here." -parent . -title "Warning" -type yesno]
-								puts $debug_out "Answer to delete local package warning message is $ans" 
+								puts $debug_out "\tanswer to delete local package warning message is $ans" 
 								switch $ans {
 									no {
 										# if the response is Abort (0), then unselect everything and break out of the foreach loop.
@@ -5409,7 +5843,13 @@ frame .wp.wfone
 							set state "install or re-install"
 						} else {
 							puts $debug_out "\t$item can only be re-installed or deleted"
-							set state "error"
+							# if the existing state includes delete then select that, otherwise it is an error
+							if {[string first "delete" $state] == -1} {
+								set state "error"
+							} else {
+								tk_messageBox -default ok -detail "To Install or Reinstall [lindex $listview_values 1] deselect all the selected local packages." -icon warning -message "A local package is selected so [lindex $listview_values 1] can only be deleted." -parent . -title "Warning" -type ok
+								set state "delete"
+							}
 						}
 					}
 				}
@@ -5741,14 +6181,19 @@ ttk::notebook .wp.wftwo.dataview \
 			-sticky w
 		# grid a warning
 		grid .filter_warning -in .filters -row 14 -column 3 \
-			-rowspan 2 \
 			-sticky nswe
 		# and remove it until needed
 		grid remove .filter_warning
-		grid .filter_clock_label -in .filters -row 16 -column 1 \
+		grid .filter_clock_label -in .filters -row 15 -column 1 \
 			-columnspan 3 \
 			-sticky w
-		grid .filter_clock -in .filters -row 16 -column 4 \
+		grid .filter_clock -in .filters -row 15 -column 4 \
+			-columnspan 2 \
+			-sticky e
+		grid .filter_upgrade_label -in .filters -row 16 -column 1 \
+			-columnspan 3 \
+			-sticky w
+		grid .filter_upgrade -in .filters -row 16 -column 4 \
 			-columnspan 2 \
 			-sticky e
 	grid .wp.wfone.listview -in .wp.wfone -row 1 -column 1 \
@@ -5814,10 +6259,10 @@ ttk::notebook .wp.wftwo.dataview \
 	grid rowconfigure .filters 11 -weight 0 -minsize 0 -pad 10
 	grid rowconfigure .filters 12 -weight 0 -minsize 0 -pad 10
 	grid rowconfigure .filters 13 -weight 0 -minsize 0 -pad 0
-	grid rowconfigure .filters 14 -weight 0 -minsize 0 -pad 10
-	grid rowconfigure .filters 15 -weight 1 -minsize 0 -pad 10
-	grid rowconfigure .filters 16 -weight 0 -minsize 0 -pad 10
-	grid rowconfigure .filters 17 -weight 0 -minsize 0 -pad 10
+	grid rowconfigure .filters 14 -weight 1 -minsize 10 -pad 0
+	grid rowconfigure .filters 15 -weight 0 -minsize 0 -pad 0
+	grid rowconfigure .filters 16 -weight 0 -minsize 0 -pad 0
+	grid rowconfigure .filters 17 -weight 0 -minsize 0 -pad 0
 	grid columnconfigure .filters 1 -weight 0 -minsize 0 -pad 0
 	grid columnconfigure .filters 2 -weight 0 -minsize 0 -pad 0
 	grid columnconfigure .filters 3 -weight 0 -minsize 0 -pad 0
@@ -5868,6 +6313,8 @@ balloon_set .filter_all "Show all packages for the selected Group"
 balloon_set .filter_warning "Vpacman has detected a possible sync error\nConsider running a Full System Upgrade"
 balloon_set .group_entry "Only show packages in the selected Group"
 balloon_set .group_label "Only show packages in the selected Group"
+balloon_set .filter_upgrade "The time of the last Full System Upgrade"
+balloon_set .filter_upgrade_label "The time of the last Full System Upgrade"
 balloon_set .filter_clock "The elapsed time since the last sync (d:h:m)"
 balloon_set .filter_clock_label "The elapsed time since the last sync (d:h:m)"
 balloon_set .filter_installed "Only show installed packages for the selected Group"
@@ -5883,41 +6330,44 @@ balloon_set .wp.wftwo.ydataview_files_scroll "Use right click to jump"
 balloon_set .wp.wftwo.ydataview_info_scroll "Use right click to jump"
 balloon_set .wp.wftwo.ydataview_moreinfo_scroll "Use right click to jump"
 
+puts $debug_out "Completed Window bindings and help set up -([expr [clock milliseconds] - $start_time])"
+
 # THREADS
 
-# aur_files
-#	use pacman to get the file list of the AUR/Local packages for a file name search
-# aur_versions
-#	use the download programme to get the available versions of the AUR/Local packages
+if {$threads} {
+	
+puts $debug_out "Start Threads set up -([expr [clock milliseconds] - $start_time])"
 
-# create a thread to lookup the files for AUR/local packages
-# this thread will keep running so that it can be used whenever start is called
-
-set aur_files_TID [thread::create {
-
-	proc thread_get_aur_files {main_TID list_local} {
-		set aur_files ""
-		foreach element $list_local {
-			# make up a list of all the local packages in the format "package file file file..."
-			# and save them in aur_files
-			set item [lindex $element 1]
-			set aur_files [lappend aur_files [concat "$item" [split [exec pacman -Qlq $item] \n]]]
-		}
-		eval [subst {thread::send -async $main_TID {::put_aur_files [list $aur_files]}}]
-    }
-    thread::wait
-}] 
-
-# create a thread to lookup the new AUR/local versions
-# this thread will keep running so that it can be used again where start is called and a delayed result is possible
-
-set aur_versions_TID [thread::create {
-
-	proc thread_get_aur_versions {main_TID dlprog tmp_dir list_local} {
-
-		if {[eval [subst {thread::send $main_TID {::test_internet}}]] != 0 || $dlprog == ""} {
-			# no internet or no download programme - abort  thread"
-		} else {	
+	# aur_files
+	#	use pacman to get the file list of the AUR/Local packages for a file name search
+	# aur_versions
+	#	use the download programme to get the available versions of the AUR/Local packages
+	
+	# create a thread to lookup the files for AUR/local packages
+	# this thread will keep running so that it can be used whenever start is called
+	
+	set aur_files_TID [thread::create {
+	
+		proc thread_get_aur_files {main_TID list_local} {
+			set aur_files ""
+			foreach element $list_local {
+				# make up a list of all the local packages in the format "package file file file..."
+				# and save them in aur_files
+				set item [lindex $element 1]
+				set aur_files [lappend aur_files [concat "$item" [split [exec pacman -Qlq $item] \n]]]
+			}
+			eval [subst {thread::send -async $main_TID {::put_aur_files [list $aur_files]}}]
+	    }
+	    thread::wait
+	}] 
+	
+	# create a thread to lookup the new AUR/local versions
+	# this thread will keep running so that it can be used again where start is called and a delayed result is possible
+	
+	set aur_versions_TID [thread::create {
+	
+		proc thread_get_aur_versions {main_TID dlprog tmp_dir list_local} {
+	
 			set aur_versions ""
 			set list ""
 			set result ""
@@ -5956,54 +6406,62 @@ set aur_versions_TID [thread::create {
 			}
 			# aur_updates should now be a clean list of all the updates including all the local packages if requested
 			eval [subst {thread::send -async $main_TID {::put_aur_versions [list $aur_versions]}}]
-		}
-    }
-    thread::wait
-}] 
+	    }
+	    thread::wait
+	}] 
+	
+	# create a thread to list the groups available
+	# this thread will stop running after it has executed since it will not be needed again
+	
+	set list_groups_TID [thread::create {
+	
+		proc thread_list_groups {main_TID tmp_dir} {
+			set list_groups "All\n[exec pacman -b $tmp_dir -Sg | sort -d]"
+			eval [subst {thread::send -async $main_TID {::put_list_groups [list $list_groups]}}]
+	    }
+	    thread::wait
+	}] 
+	
+	# create a thread to test the system state
+	# this thread will keep running so that it can be used whenever it is needed
+	
+	set test_system_TID [thread::create {
+	
+		proc thread_test_system {main_TID} {
+			set error [catch {exec pacman -Qu}] 
+			set result "stable"
+			if {$error == 0} {
+				set result "unstable"
+			}	
+			eval [subst {thread::send -async $main_TID {::test_system [list $result]}}]
+	    }
+	    thread::wait
+	}] 
+	
+puts $debug_out "Completed Threads set up -([expr [clock milliseconds] - $start_time])"
 
-# create a thread to list the groups available
-# this thread will stop running after it has executed since it will not be needed again
-
-set list_groups_TID [thread::create {
-
-	proc thread_list_groups {main_TID tmp_dir} {
-		set list_groups "All\n[exec pacman -b $tmp_dir -Sg | sort -d]"
-		eval [subst {thread::send -async $main_TID {::put_list_groups [list $list_groups]}}]
-    }
-    thread::wait
-}] 
-
-# create a thread to test the system state
-# this thread will keep running so that it can be used whenever it is needed
-
-set test_system_TID [thread::create {
-
-	proc thread_test_system {main_TID} {
-		set error [catch {exec pacman -Qu}] 
-		set result "stable"
-		if {$error == 0} {
-			set result "unstable"
-		}	
-		eval [subst {thread::send -async $main_TID {::test_system [list $result]}}]
-    }
-    thread::wait
-}] 
+}
 
 # START
 set_clock
+.filter_upgrade configure -text [clock_format $update_time short_full]
 # draw the screen now to make it appear as if it is loading faster and then run start to get the full list of packages
+# note: vpacman takes approx 200 milliseconds to compile to bytecode and start execution
 puts $debug_out "Window display - first display show, update screen ([expr [clock milliseconds] - $start_time])"
-update
+# this update takes 0.3 seconds
+update idletasks
 # but do not interact with the window
 # place a grab on something unimportant to avoid random button presses on the window
-puts $debug_out "Grab set"
+puts $debug_out "Grab set ([expr [clock milliseconds] - $start_time])"
 grab set .buttonbar.label_message
 # call start
 start
 # we do not need to run the filter/sort procedure here so we had better update the window
 puts $debug_out "Window display - before list_show, update screen ([expr [clock milliseconds] - $start_time])"
-update
+update idletasks
 list_show $list_all
+update idletasks
+# so we have an updated list - set filter_list to the new list
 set filter_list $list_all
 if {$su_cmd == ""} {
 	tk_messageBox -default ok -detail "Some commands cannot be run as root. Consider restarting as a standard user" -icon warning -message "Running vpacman as root is not recommended." -parent . -title "Warning" -type ok
@@ -6014,7 +6472,7 @@ if {!$threads} {
 # release the grab
 grab release .buttonbar.label_message
 puts $debug_out "Window display - complete - grab released, now update screen ([expr [clock milliseconds] - $start_time])"
-update
+update idletasks
 # select the download programme to use
 # first check for a preference set in pacman.conf, otherwise prefer curl if it is installed
 set dlprog [find_pacman_config dlprog]
@@ -6025,11 +6483,17 @@ if {$dlprog == "" || [catch {exec which $dlprog}] == 1} {
 		set dlprog "wget"
 	}
 }
+# this is pretty much impossible but check anyway
+if {$dlprog == ""} {
+	tk_messageBox -default ok -detail "No download programme found" -icon warning -message "Pacman cannot function without an installed download programme (curl or wget)." -parent . -title "Warning" -type ok
+}
 puts $debug_out "Download programme set to $dlprog ([expr [clock milliseconds] - $start_time])"
 if {$threads} {
-	# now run the aur_versions thread to get the current aur_versions
-	puts $debug_out "Call aur_versions thread with main_TID, dlprog, tmp_dir and list_local ([expr [clock milliseconds] - $start_time])"
-	thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
+	if {[test_internet] == 0} {
+		# if the internet is up then run the aur_versions thread to get the current aur_versions
+		puts $debug_out "Call aur_versions thread with main_TID, dlprog, tmp_dir and list_local ([expr [clock milliseconds] - $start_time])"
+		thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
+	}
 	# and the list_groups thread to find all of the groups available
 	puts $debug_out "Call list_groups thread with main_TID and tmp_dir ([expr [clock milliseconds] - $start_time])"
 	thread::send -async $list_groups_TID [list thread_list_groups [thread::id] $tmp_dir]
@@ -6037,6 +6501,8 @@ if {$threads} {
 	list_groups
 	puts $debug_out "Cannot run versions thread - threads not enabled"
 }
+# test the current configuration options
+test_configs
 
 
 
