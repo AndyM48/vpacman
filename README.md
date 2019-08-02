@@ -1,3 +1,6 @@
+# This is a release candidate for Vpacman.
+There are many changes to the code so please treat with caution and report all bugs found.
+
 # vpacman
 A graphical front end for pacman and the AUR - built with Tcl/Tk
 
