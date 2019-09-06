@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.0 alpha-2"
+set version "1.4.0 alpha-3"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -547,6 +547,9 @@ if {[exec id -u] eq 0 } {
 	set su_cmd ""
 # if not root then do we have sudo privileges without a password
 } else {
+	# remove any saved credentials
+	set error [catch {exec sudo -k} result]
+	# and test if a passsword is required
 	set error [catch {exec sudo -n true} result]
 	if {$error == 0} {
 		set su_cmd "sudo -n"
@@ -560,7 +563,10 @@ if {[exec id -u] eq 0 } {
 		# so remove the prompt with -p ""
 		set error [catch {exec sudo -S -v -p "" < /dev/null} result]
 		# what was the result?
-		if {[string first "may not run sudo on" $result] == -1} {set su_cmd "sudo"}
+		# if the result includes the user name then it will be a "Sorry ..." result
+		# otherwise it will include sudo: as in "sudo: no password...."
+		# both will be error 1
+		if {[string first "$env(USER)" $result] == -1} {set su_cmd "sudo"}
 		# otherwise just use the default
 	}
 }
@@ -1554,7 +1560,6 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 				set result "failed"
 			}
 		}
-		
 	}	
 
 	if {$vstate == "indate" || $result == "failed"} {
@@ -1722,10 +1727,10 @@ bind bubble <Motion> {
 
 proc check_config_files {} {
 
-global debug_out diffprog start_time su_cmd
+global debug_out diffprog su_cmd
 # check /etc and /usr/bin for any configuration files which need to be updated
 
-	puts $debug_out(1) "check_config_files - called ([expr [clock milliseconds] - $start_time])"
+	puts $debug_out(1) "check_config_files called"
 	set config_files ""
 	set file_list ""
 	set files ""
@@ -1734,12 +1739,14 @@ global debug_out diffprog start_time su_cmd
 	update
 	if {[catch {exec which find}] == 1} {
 		tk_messageBox -default ok -detail "Consider installing the findutils package" -icon info -message "The find command is required." -parent . -title "Cannot Check Config Files" -type ok
+		puts $debug_out(2) "check_config_files - findutils not installed - return1"
 		return 1
 	}
 	set error [catch {exec find /etc /usr/bin \( -name *.pacnew -o -name *.pacsave \) -print} files]
+	puts $debug_out(2) "check_config_files - find command returned error $error and result $files"
 	if {$files == "child process exited abnormal"} {set files ""}
 	foreach file [split $files \n] {
-		if {[string first "Permission denied" $file] == -1} {
+		if {[string first "find:" $file] == -1} {
 			set config_files [append config_files $lf $file]
 			set file_list [lappend file_list $file]
 			set lf "\n\t"
@@ -1747,11 +1754,11 @@ global debug_out diffprog start_time su_cmd
 	}
 	set_message terminal ""
 	if {$config_files == ""} {
-		puts $debug_out(1) "check_config_files - no files found to update ([expr [clock milliseconds] - $start_time])"	
+		puts $debug_out(1) "check_config_files - no files found to update"	
 		set_message terminal "No configuration files found to check"
 		after 3000 {set_message terminal ""}
 	} else {
-		puts $debug_out(2) "check_config_files - found files to update: $config_files ([expr [clock milliseconds] - $start_time])"	
+		puts $debug_out(2) "check_config_files - found files to update: $config_files"	
 		view_text "
 	
 	The following configuration files may need attention:
@@ -2058,6 +2065,8 @@ global debug_out su_cmd win_mainx win_mainy
 									set result [read $fid]
 									close $fid
 								}
+								# language - Authentication failure occurs only in English, or on Password cancelled (above)
+								# the second error message will be displayed instead, whcih is not too bad. 								
 								if {[string first "Authentication failure" $result] != -1} {
 									puts $debug_out(2) "get_terminal - Authentification failed"
 									set_message terminal  "Authentication failed - clean cache cancelled. "
@@ -2784,32 +2793,19 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 		# no need to check for 'error 1' which is an aborted script, all errors are checked below
 		file delete $tmp_dir/errors
 		puts $debug_out(2) "execute - read error file, the error file text was:\n$errorinfo"
-		# check the output found
-		# if the string "Packages (" exists then the next part shows the number of updates available
-		# if the string "ignoring package upgrade" exists then there are packages ignored
-		if {[string first "unable to lock database" $errorinfo] != -1} {
-			set lck_dir $dbpath
-			if {$type == "sync"} {set lck_dir ${tmp_dir}/}
+		# check the output found - only works if it is in English
+		# check for lock files
+		set lck_dir $dbpath
+		if {$type == "sync"} {set lck_dir ${tmp_dir}/}
+		if {[file exists ${lck_dir}db.lck]} {
 			tk_messageBox -message "Unable to lock database" -detail "If you're sure a package manager is not already\nrunning, you can remove ${lck_dir}db.lck" -icon error -title "Sync - Update Failed" -type ok
 			return 1
+		# language - this error is restricted to English but we can ignire it at present.
+		# the error was reported in the terminal, the message only shows one solution
 		} elseif {[string first "error: target not found:" $errorinfo] != -1} {
-			# cannot get "target not found" if the database is locked, so use if elseif tp check if database is locked first
+			# cannot get "target not found" if the database is locked, so use if elseif to check if database is locked first
 			tk_messageBox -message "Target not found" -detail "Run Full System Update to update the live database and then try again." -icon error -title "Install Failed" -type ok
-		} else {
-			if {$type == "upgrade_all"} {
-				set errorinfo [split $errorinfo \n]
-				set ignores 0
-				set replaces 0
-				foreach line $errorinfo {
-					if {[string first "ignoring package upgrade" $line] != -1} {
-						incr ignores
-					} elseif {[string first "Replace " $line] != -1} {
-						incr replaces
-					}
-				}
-				puts $debug_out(2) "execute - upgrade_all found $ignores ignores and $replaces replaces in error file"
-			}
-		}	
+		} 
 	}
 	# try and find out what happened by reading the new entries in the log file
 	# it seems that the logfile takes a while to be written, so we may need to pause here to allow the writes to complete
@@ -2846,7 +2842,7 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 			incr count_deletes
 		}
 	}
-	
+
 	puts $debug_out(2) "execute - Synced $count_syncs, Upgraded $count_upgrades, Installed $count_installs, Reinstalled $count_reinstalls, Deleted $count_deletes"	
 	
 	if {[expr $count_syncs + $count_upgrades + $count_installs + $count_reinstalls + $count_deletes] != 0} {
@@ -2905,7 +2901,23 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 		foreach item $upgrade_list {
 			if {[lsearch $list_upgrades $item] != -1} {incr check_upgrade_list}
 		}
-		puts $debug_out(2) "execute - upgrade_all - $check_upgrade_list packages from [llength $upgrade_list] were upgraded, $ignores packages were ignored."
+		puts $debug_out(2) "execute - upgrade_all - $check_upgrade_list packages from [llength $upgrade_list] were upgraded."
+		set omitted [expr [llength $upgrade_list] - $check_upgrade_list]
+		puts $debug_out(2) "execute - upgrade_all - $omitted packages were omitted"
+		# the ignored list from find_pacman_config is calculated from the list_outdated created before the sync from upgrade_all
+		set ignores [llength [find_pacman_config ignored]]
+		puts $debug_out(2) "execute - upgrade_all - $ignores are set to ignore in the pacman config file"
+		if {$ignores != $omitted} {
+			puts $debug_out(2) "execute - upgrade_all - there are further errors in the upgrade."
+			# we can check whether there were any more ignored packages were in the actual upgrade list
+			set ignores 0
+			set ignored_packages [find_pacman_config all_ignored]
+			set outdated [split [exec pacman -Qqu] \n]
+			foreach item $outdated {
+				if {[string first $item $ignored_packages] != -1} {incr ignores}
+			}
+			puts $debug_out(2) "execute - upgrade_all - reset $ignores package updates ignored in the pacman config file"
+		}
 		if {[expr $check_upgrade_list + $ignores] == [llength $upgrade_list]} {
 			puts $debug_out(2) "execute - upgrade_all succeeded"
 			# remove any warning label and show the change immediately
@@ -2983,7 +2995,6 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 				set lf "\n"
 			}
 		}
-			 
 	}
 	if {$action_message != ""} {
 		tk_messageBox -default ok -detail "$action_message" -icon info -message "Further action may be required" -parent . -title "Further Action" -type ok
@@ -3419,7 +3430,7 @@ global debug_out group list_all list_installed list_show_order list_uninstalled 
 
 proc find_pacman_config {data} {
 
-global debug_out start_time
+global debug_out list_installed list_outdated start_time
 # look up data in the pacman configuration file
 		
 	puts $debug_out(1) "find_pacman_config called for $data - ([expr [clock milliseconds] - $start_time])"
@@ -3472,20 +3483,66 @@ global debug_out start_time
 			puts $debug_out(1) "find_pacman_config - returned $dlprog - ([expr [clock milliseconds] - $start_time])"
 			return $dlprog
 		}
-		ignored {
+		ignored -
+		all_ignored {
 			set ignored_list ""
+			set ignored_updates ""
+			set ignored_groups ""
+			set ignored_groups_installed ""
+			set ignored_groups_upgrades ""
 			
-			# find the ignored list defined in /etc/pacman.conf
+			
+			# find the ignored list and the ignored groups defined in /etc/pacman.conf
 			set fid [open "/etc/pacman.conf" r]
 			while {[eof $fid] == 0} {
 				gets $fid line
 				if {[string first "IgnorePkg" $line] == 0} {
 					set ignored_list [string trim [string range $line [string first "=" $line]+1 end]]
+					foreach item $ignored_list {
+						if {[lsearch -index 1 $list_outdated $item] != -1} {
+							append ignored_updates " " $item
+						}
+					}
+				}
+				if {[string first "IgnoreGroup" $line] == 0} {
+					set ignored_groups [string trim [string range $line [string first "=" $line]+1 end]]
 				}
 			}
 			close $fid
-			puts $debug_out(1) "find_pacman_config - returned $ignored_list ([expr [clock milliseconds] - $start_time])"
-			return $ignored_list
+			puts $debug_out(2) "find_pacman_config - found ignored packages \"$ignored_list\""
+			puts $debug_out(2) "find_pacman_config - found ignored groups \"$ignored_groups\""
+
+			if {$ignored_groups != ""} {
+				# list all the ignored packages in each group
+				foreach group $ignored_groups {
+					puts $debug_out(3) "find_pacman_config - check installed packages from $group"
+					foreach element $list_installed {
+						set groups [split [lrange $element 4 4] ","]
+						foreach item $groups {
+							if {[string first $item $ignored_groups] != -1} {append ignored_list " " [lrange $element 1 1]}
+						}
+					}
+					puts $debug_out(3) "find_pacman_config - check outdated packages from $group"
+					foreach element $list_outdated {
+						set groups [split [lrange $element 4 4] ","]
+						foreach item $groups {
+							if {[string first $item $ignored_groups] != -1} {append ignored_list " " [lrange $element 1 1]}
+						}
+					}
+				}
+			}
+
+			puts $debug_out(2) "find_pacman_config - found ignored packages \"[string trim $ignored_list]\""
+			puts $debug_out(2) "find_pacman_config - found ignored updates \"[string trim $ignored_updates]\""
+			if {$data == "ignored"} {
+				# we cannot be certain that the ignored updates is complete since, some packages updates could have been released sinc the last sync
+				puts $debug_out(1) "find_pacman_config - returned assumed ignored updates \"$ignored_updates\" ([expr [clock milliseconds] - $start_time])"
+				return [string trim $ignored_updates]
+			} else {
+				# this is the complete list of packages to be ignored, but some may not need to be updated
+				puts $debug_out(1) "find_pacman_config - returned all ignored packages \"$ignored_list\" ([expr [clock milliseconds] - $start_time])"
+				return [string trim $ignored_list]
+			}
 		}
 	}
 }
@@ -3694,7 +3751,7 @@ global aur_list debug_out dlprog tmp_dir
 	close $fid
 	set aur_list [split $aur_list \n]
 	# check that the first line is the comment and remove it
-	if {[string first "# AUR package list" [lindex $aur_list 0]] != -1} {set aur_list [lreplace $aur_list 0 0]}
+	if {[string first "#" [lindex $aur_list 0]] == 0} {set aur_list [lreplace $aur_list 0 0]}
 	# check that the last line is not blank, if it is then remove it
 	if {[lindex $aur_list end] == ""} {set aur_list [lreplace $aur_list end end]}
 	# now sort the list
@@ -4463,38 +4520,37 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 					-sticky ns
 				.wp.wftwo.dataview.moreinfo insert 1.0 "Searching ..."
 				update
-				# try to get the info from the main database
-				puts $debug_out(2) "get_dataview - try sync database ([expr [clock milliseconds] - $start_time])"
-				set error [catch {exec pacman -b $tmp_dir -Sii $package} result]
-				set result [split $result \n]
-				if {$error != 0} {
-					# if that did not work then try the local database
-					puts $debug_out(2) "get_dataview - main database failed try local database ([expr [clock milliseconds] - $start_time])"
-					set error [catch {exec pacman -b $tmp_dir -Qi $package} result]
-					set result [split $result \n]
-					set result [linsert $result 0 "Repository      : local"]
-				}
-				puts $debug_out(2) "get_dataview - found moreinfo ([expr [clock milliseconds] - $start_time])"
-				# and if it is installed then save the first line of the data, the repository,
-				# and then get the rest from the local database
 				if {$available != "{}"} {
-					# $result holds the info from the main database until it is overwritten
-					set repository "[lindex $result 0]"
+					# try to get the extended info from the local database if the package is installed
+					puts $debug_out(2) "get_dataview - try local database ([expr [clock milliseconds] - $start_time])"
 					set error [catch {exec pacman -b $tmp_dir -Qi $package} result]
 					set result [split $result \n]
-					set result [linsert $result 0 "$repository"]
+					# add in a line for the repository
+					set result [linsert $result 0 "Repository      : $repo"]
+				} else {
+					# try to get the info from the main database
+					puts $debug_out(2) "get_dataview - try sync database ([expr [clock milliseconds] - $start_time])"
+					set error [catch {exec pacman -b $tmp_dir -Sii $package} result]
+					set result [split $result \n]
 				}
+				# work out the spacing for each line from the second row, since we may have inserted the first row
+				set index [string first ":" [lindex $result 1]]
 				.wp.wftwo.dataview.moreinfo delete 1.0 end
 				if {$error == 0} {
+					set count 0
 					foreach row $result {
+						incr count
+						# of this is row 1 then change the wording to Repository : ....
+						if {$count == 1} {
+							.wp.wftwo.dataview.moreinfo insert end "Repository[string repeat " " [expr $index - 10]]: $repo\n" 
 						#  if we know of a browser, and this is a local package then use the package name to make a URL and insert tags accordingly
-						if {$aur_only == true && $browser != "" && [string first "Name" $row] == 0} {
+						} elseif {$aur_only == true && $browser != "" && $count == 2} {
 							# click on the link to view it in the selected browser
-							.wp.wftwo.dataview.moreinfo tag bind get_aur <ButtonRelease-1> "puts $debug_out(2) \"GET AUR URL\"; exec $browser https://aur.archlinux.org/packages/[string range $row 18 end] &"
+							.wp.wftwo.dataview.moreinfo tag bind get_aur <ButtonRelease-1> "puts $debug_out(2) \"GET AUR URL\"; exec $browser https://aur.archlinux.org/packages/[string range $row [expr $index + 2] end] &"
 							# add the normal text to the text box
-							.wp.wftwo.dataview.moreinfo insert end "[string range $row 0 17]" 
+							.wp.wftwo.dataview.moreinfo insert end "[string range $row 0 [expr $index + 1]]" 
 							# add the package name to the text box and use the pre-defined tags to alter how it looks
-							.wp.wftwo.dataview.moreinfo insert end "[string range $row 18 end]\n" "url_tag get_aur url_cursor_in url_cursor_out" 
+							.wp.wftwo.dataview.moreinfo insert end "[string range $row [expr $index + 2] end]\n" "url_tag get_aur url_cursor_in url_cursor_out" 
 						#  if we know of a browser then find URL and insert tags accordingly
 						} elseif {$browser != "" && [string first "URL" $row] == 0} {
 							# click on the link to view it in the selected browser
@@ -4507,25 +4563,25 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 							# All this section is repeated from above and should probably be in a procedure
 							if {[string first "Version" $row] == 0} {
 								if {$available == "{}"} {
-									.wp.wftwo.dataview.moreinfo insert end "Installed       : no\n"
-									.wp.wftwo.dataview.moreinfo insert end "Available       : $version\n"
+									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat " " [expr $index -9]]: no\n"
+									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat " " [expr $index -9]]: $version\n"
 								} elseif {$available == "-na-"} {
 									# so the thread lookup did not work, so get the available version now
 									puts $debug_out(2) "get_dataview - moreinfo - available was -na-"
-									.wp.wftwo.dataview.moreinfo insert end "Installed       : $version\n"
-									.wp.wftwo.dataview.moreinfo insert end "Available       : Searching ...\n"
+									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat " " [expr $index -9]]: $version\n"
+									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat " " [expr $index -9]]: Searching ...\n"
 									update
 									# since this is an AUR package or another local install
 									# we can use an RPC to get the latest version number
 									set result [get_aur_info $package]
 									set version [lindex $result 1]
 									if {$version == ""} {set version "not found in AUR"}
-									.wp.wftwo.dataview.moreinfo delete [expr [.wp.wftwo.dataview.moreinfo count -lines 0.0 end] -1].18 end
-									.wp.wftwo.dataview.moreinfo insert end "$version \n"
+									.wp.wftwo.dataview.moreinfo delete [expr [.wp.wftwo.dataview.moreinfo count -lines 0.0 end] -1].0 end
+									.wp.wftwo.dataview.moreinfo insert end ""Available[string repeat " " [expr $index -9]]: $version\n""
 									puts $debug_out(2) "get_dataview - moreinfo - version available is $version"
 								} else {
-									.wp.wftwo.dataview.moreinfo insert end "Installed       : $version\n"
-									.wp.wftwo.dataview.moreinfo insert end "Available       : $available\n"
+									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat " " [expr $index -9]]: $version\n"
+									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat " " [expr $index -9]]: $available\n"
 								}
 							} else {
 								.wp.wftwo.dataview.moreinfo insert end "$row\n"
@@ -4790,7 +4846,6 @@ global debug_out env su_cmd win_mainx win_mainy window
 	grab set .password
 	focus .password.entry
 
-	puts $debug_out(2) "get_password - [focus]"
 	tkwait variable window
 	
 	set password [.password.entry get]
@@ -4872,6 +4927,8 @@ global debug_out start_time su_cmd terminal terminal_string tmp_dir
 					puts $debug_out(2) "get_terminal - get_password cancelled"
 				}
 				if {$error == 1} {
+					# language - Authentication failure occurs only in English, or on Password cancelled (above)
+					# the second error message will be displayed instead, which is not too bad.
 					if {[string first "Authentication failure" $result] != -1} {
 						puts $debug_out(2) "get_terminal - Authentification failed"
 						set detail "Authentication failed - install terminal cancelled. "
@@ -5083,25 +5140,6 @@ global debug_out list_all list_local list_local_ids list_installed list_outdated
 			lappend list_uninstalled $item
 		}	
 		lappend list_all $item
-###
-if 0 {
-		if {[string first "\[installed\]" $element] != -1 } {
-			set item "[string map {\/ \ } [lrange $element 0 0]] [lrange $element 1 1] [lrange $element 1 1] [string trim $group "()"] \{[string trim $description]\}"
-			lappend list_installed $item 
-		# else if the item has been installed and there is a new version available then set the third field to the installed version and set the fourth field to the current version
-		} elseif {[string first "\[installed:" $element ] != -1 } {
-			set installed [string range $element [string first "\[installed:" $element]+12 [string first \] $element [string first "\[installed:" $element]+12]-1]
-			set item "[string map {\/ \ } [lrange $element 0 0]] $installed [lrange $element 1 1] [string trim $group "()"] \{[string trim $description]\}"
-			lappend list_installed $item
-			if {$installed != [lrange $element 1 1]} {
-				# is available newer than installed?
-				# if installed does not equal the available version then it may be newer!!!
-				if {[test_versions $installed [lrange $element 1 1]] == "newer"} {
-					lappend list_outdated $item
-				}
-			}
-		}
-}
 	}
 	# join the local package list to the packages installed from the database and sort them into the required order
 	set list_all [concat $list_all $list_local]
@@ -5783,6 +5821,8 @@ global debug_out mirror_countries su_cmd tmp_dir
 			puts $debug_out(2) "mirrorlist_filter - get_password cancelled"
 		}
 		if {$error == 1} {
+			# language - Authentication failure occurs only in English, or on Password cancelled (above)
+			# the second error message will be displayed instead, which is not too bad.
 			if {[string first "Authentication failure" $result] != -1} {
 				puts $debug_out(1) "mirrorlist_filter - Authentification failed, return 1"
 				set detail "Authentification failed - rank mirrors cancelled. "
@@ -5875,6 +5915,9 @@ global debug_out mirror_countries win_mainx win_mainy
 
 # CONFIGURE RANK MIRRORS WINDOW
 
+	label .update_mirrors.source_file
+	.update_mirrors.source_file configure -text "$source"	
+		
 	label .update_mirrors.source_label
 	.update_mirrors.source_label configure -text "Source : ${source} (${generated})"
 
@@ -5890,7 +5933,7 @@ global debug_out mirror_countries win_mainx win_mainy
 		button .update_mirrors.countries_button \
 			-command {
 				# update mirror_countries
-				mirrorlist_countries [string range [.update_mirrors.source_label cget -text] 9 end-11]
+				mirrorlist_countries [.update_mirrors.source_file cget -text]
 				tkwait window .update_mirrors.countries
 			} \
 			-text "Select"
@@ -5941,7 +5984,7 @@ global debug_out mirror_countries win_mainx win_mainy
 		button .update_mirrors.select\
 			-command {
 				# get the source file 
-				set source [string range [.update_mirrors.source_label cget -text] 9 end-11]
+				set source [.update_mirrors.source_file cget -text]
 				# select the country mirrors
 				# make sure that the number of mirrors is not blank
 				if {[.update_mirrors.limit_entry get] == ""} {.update_mirrors.limit_entry insert 0 0}
@@ -6889,7 +6932,7 @@ global debug_out filter_list find findtype list_repos pacman_files_upgrade pkgfi
 					if {$su_cmd == "su -c"} {set command "$su_cmd \"pkgfile -u\""}
 				} else {
 					set action "Update pacman file databases"
-					set command "$su_cmd pacman -b $dir/pacman -Fy"
+					set command "$su_cmd pacman -b $dir -Fy"
 					if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $dir -Fy\""}
 				}
 				set wait true
@@ -7150,7 +7193,7 @@ global debug_out start_time
 
 proc toggle_buttonbar {} {
 
-global show_buttonbar	
+global debug_out show_buttonbar	
 # toggle the buttonbar on or off
 
 	puts $debug_out(1) "toggle_buttonbar called"
@@ -7259,6 +7302,8 @@ global debug_out su_cmd tmp_dir win_mainx win_mainy
 				puts $debug_out(2) "toggle_ignored - get_password cancelled"
 			}
 		 	if {$error == 1} {
+				# language - Authentication failure occurs only in English, or on Password cancelled (above)
+				# the second error message will be displayed instead, which is not too bad.
 				if {[string first "Authentication failure" $result] != -1} {
 					puts $debug_out(2) "toggle_ignored - Authentification failed"
 					set detail "Authentification failed - Toggle ignored cancelled"
@@ -7469,6 +7514,8 @@ global backup_dir backup_log debug_out keep_log su_cmd win_mainx win_mainy
 								puts $debug_out(2) "trim_log - get_password cancelled"
 							}
 						 	if {$error == 1} {
+								# language - Authentication failure occurs only in English, or on Password cancelled (above)
+								# the second error message will be displayed instead, which is not too bad.
 								if {[string first "Authentication failure" $result] != -1} {
 									puts $debug_out(2) "trim_log - Authentification failed"
 									set_message terminal "Authentification failed - Clean Pacman Log cancelled"
@@ -7666,6 +7713,8 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 			set result "Authentication failure"
 			puts $debug_out(2) "update_config_files - get_password cancelled"
 		}
+		# language - Authentication failure occurs only in English, or on Password cancelled (above)
+		# the second error message will be displayed instead, which is not too bad.
 	 	if {$error != 0} {
 			if {[string first "Authentication failure" $result] != -1} {
 				puts $debug_out(2) "update_config_files - Authentification failed"
@@ -8109,6 +8158,8 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 						puts $debug_out(2) "update_config_files - get_password cancelled"
 					}
 				 	if {$error != 0} {
+						# language - Authentication failure occurs only in English, or on Password cancelled (above)
+						# the second error message will be displayed instead, which is not too bad.
 						if {[string first "Authentication failure" $result] != -1} {
 							puts $debug_out(2) "update_config_files - Authentification failed"
 							set detail "Authentification failed -commit config files changes cancelled"
@@ -8312,6 +8363,8 @@ global debug_out home message su_cmd tmp_dir
 			puts $debug_out(2) "update_cups - get_password cancelled"
 		}
 		if {$error != 0} {
+			# language - Authentication failure occurs only in English, or on Password cancelled (above)
+			# the second error message will be displayed instead, which is not too bad.
 			if {[string first "Authentication failure" $result] != -1} {
 				puts $debug_out(1) "update_cups - Authentification failed"
 				set detail "Authentification failed - update_cups cancelled"
@@ -10053,6 +10106,8 @@ frame .wp.wfone \
 					puts $debug_out(1) "mark explicitally installed - get_password cancelled"
 				}
 				if {$error == 1} {
+					# language - Authentication failure occurs only in English, or on Password cancelled (above)
+					# the second error message will be displayed instead, which is not too bad.
 					if {[string first "Authentication failure" $result] != -1} {
 						puts $debug_out(1) "mark explicitally installed - Authentification failed"
 						set_message terminal "Authentification failed - mark $package as explicitly installed cancelled"
