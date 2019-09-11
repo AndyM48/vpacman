@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.0 alpha-3"
+set version "1.4.0 alpha-4"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -794,9 +794,11 @@ global debug_out listview_selected part_upgrade select tv_select
 	puts $debug_out(1) "all_clear called"
 	set select false
 	set tv_select ""
+	puts $debug_out(2) "all_clear - remove any treeview selection"
 	catch {.wp.wfone.listview selection remove $listview_selected}
 	# bind TreeviewSelect will update all the variables when the selection changes
 	vwait tv_select
+	puts $debug_out(2) "all_clear - treeview select completed"
 	set part_upgrade 0
 	puts $debug_out(1) "all_clear completed - partial upgrades set to no"
 	return 0
@@ -1061,7 +1063,7 @@ global aur_list debug_out
 				puts $debug_out(2) "aur_install_depends - cannot install \"$error_list\""
 				set ans [tk_messageBox -default no -detail "The following dependencies:   ${error_list}\n\n      could not be installed from here.\n\nDo you want to try to continue anyway? This may not succeed,\n\nHint: Check the list of dependencies for $package (Tools > Install AUR/Local > \"$package\" > Info) and check the AUR page (AUR:) for the package." -icon error -message "Unable to find dependencies in the AUR package list" -parent . -title "Cannot install $package" -type yesno]
 				if {$ans == "yes"} {
-					puts $debug_out(2) "aur_install_depends - answer to cannot install $package is yes"
+					puts $debug_out(2) "aur_install_depends - answer to cannot install \"$error_list\" is yes"
 					puts $debug_out(2) "aur_install_depends - remove \"$error_list\" from \"$installs\""
 					# remove the error_list items and try to install the rest
 					foreach item $error_list {
@@ -1081,7 +1083,17 @@ global aur_list debug_out
 		# now try to install them
 		foreach item $installs {
 			puts $debug_out(3) "aur_install_depends - try to install $item from $installs"
-			if {$no_depends} {
+			if {$item == $installs} {
+				puts $debug_out(3) "aur_install_depends - try to install $item"
+				set error [aur_upgrade $item "aur"]
+				puts $debug_out(3) "aur_install_depends - error was $error"	
+				if {$error == 0 } {
+					return 0
+				} else {
+					return 1
+				}			
+			} elseif {$no_depends} {
+				puts $debug_out(3) "aur_install_depends - no_depends is true"
 				set add_depends ""
 				# reset no_depends for any futures passes
 				set no_depends false
@@ -1137,6 +1149,9 @@ global aur_list debug_out
 			# there are more packages to install so call aur_install_depends again
 			aur_install_depends $item $installs
 		}
+	} else {
+		puts $debug_out(1) "aur_install_depends cancelled"
+		return 1
 	}
 	puts $debug_out(1) "aur_install_depends completed"
 }
@@ -6669,7 +6684,7 @@ proc set_message {type text} {
 global debug_out find_message message selected_message
 # print a message consisting of any saved message plus any new text:
 	
-	puts $debug_out(1) "set_message called - Type $type, Text \"$text\"\n\tFind Message \"$find_message\", Selected Message \"$selected_message\""
+	puts $debug_out(1) "set_message called - type $type, text \"$text\"\n\tFind Message \"$find_message\", Selected Message \"$selected_message\""
 	# when a new item is selected then print the text and save it in the selected message variable
 	if {$type == "selected"} {
 		set selected_message $text
@@ -6685,7 +6700,7 @@ global debug_out find_message message selected_message
 	# for other types of message (e.g.terminal) just print the text
 		set message "$text"
 	}
-	puts $debug_out(1) "set_message completed - Find Message \"$find_message\", Selected Message \"$selected_message\"\n\tMessage \"$message\""
+	puts $debug_out(1) "set_message completed - message \"$message\"\n\tFind Message \"$find_message\", Selected Message \"$selected_message\""
 	
 }
 
@@ -8976,8 +8991,8 @@ frame .buttonbar
 	bind .buttonbar.entry_findfile <Return> {
 		puts $debug_out(1) "Return key ran findfile \"$findfile\""
 		if {$findfile != ""} {
-			# clear any selections from before
-			all_clear
+###			# clear any selections from before
+###			all_clear
 			# reset the filter and group to all
 			set error 0
 			set filter "all"
@@ -9109,6 +9124,9 @@ frame .buttonbar
 				list_show $pkglist
 			}
 			if {[llength $pkglist] == 0} {
+### now clear treeview
+				# now delete the contents from  listview
+				.wp.wfone.listview delete [.wp.wfone.listview children {}]
 				set_message terminal "No packages found containing \"$findfile\""
 			} elseif {[llength $pkglist] > 1} {
 				set_message terminal "[llength $pkglist] packages provide \"$findfile\""
@@ -9711,6 +9729,7 @@ frame .wp.wfone \
 				set listview_selected_in_order ""
 				set_message selected ""
 				set repo_delete_msg true
+				set state ""
 				puts $debug_out(2) "TreeviewSelect - set the nothing selected menus states" 
 				.buttonbar.install_button configure -state disabled
 				.buttonbar.delete_button configure -state disabled
@@ -9736,7 +9755,7 @@ frame .wp.wfone \
 			update
 			# find whether we need to install or delete the packages selected
 			set listview_values ""
-			set state ""
+###			set state ""
 			# if there is nothing in the list then disable everything
 			# we need this because the selection changed so the options may have changed as well
 			if {[llength $list_show] == 0} {
@@ -9914,8 +9933,8 @@ frame .wp.wfone \
 								puts $debug_out(3) "$item is local and state is delete"
 								# bind TreeviewSelect will update all the variables when the selection changes
 							} elseif {[string first "delete" $state] != -1} {
-								puts $debug_out(3) "$item is local and state includes delete"
-								set ans [tk_messageBox -default yes -detail "Do you want to continue selecting packages to delete, answer No to start a new selection" -icon warning -message "[lindex $listview_values 1] is a local package and can only be deleted from here." -parent . -title "Warning" -type yesno]
+								puts $debug_out(3) "$item is local and state ($state) includes delete"
+								set ans [tk_messageBox -default yes -detail "Do you want to continue selecting packages to delete, answer No to start a new selection" -icon warning -message "[lindex $listview_values 1] is a local package and can only be deleted from here.(1)" -parent . -title "Warning" -type yesno]
 								puts $debug_out(3) "\tanswer to delete local package warning message is $ans" 
 								switch $ans {
 									no {
@@ -9939,9 +9958,9 @@ frame .wp.wfone \
 								puts $debug_out(3) "\tset to delete"
 							}
 							if {$tverr_text == ""} {
-								set tverr_text [list $item "[lrange $listview_values 1 1] is a local package and can only be deleted"]
+								set tverr_text [list $item "[lrange $listview_values 1 1] is a local package and can only be deleted (2)"]
 							} else {
-								set tverr_text [lappend tverr_text $item "[lrange $listview_values 1 1] is a local package and can only be deleted"]
+								set tverr_text [lappend tverr_text $item "[lrange $listview_values 1 1] is a local package and can only be deleted (3)"]
 							}
 							puts $debug_out(3) "\t$tverr_text"
 						} else {
