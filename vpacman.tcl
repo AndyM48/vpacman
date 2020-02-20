@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.0"
+set version "1.4.1"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -608,7 +608,7 @@ puts $debug_out(1) "Version $version: User is $env(USER) - Home is $home - Confi
 #	After a filter checkbutton is selected return the necessary variables to sane settings, 
 #		set aur_only to the value requested. Reset the list checkbutton titles. 
 # proc clock_format
-# format a time according to the format requested
+# 	format a time according to the format requested
 # proc configurable
 # 	Set configurable variables to sane values
 # proc configurable_default
@@ -914,7 +914,7 @@ global debug_out depends_searches list_local win_mainx win_mainy
 			set ::tk::dialog::file::showHiddenBtn 1
 			# now choose to display only the package files
 			set types {
-				 {{Packages}       {.pkg.tar.xz}        }
+				 {{Packages}       {.pkg.tar.xz .pkg.tar.zst}        }
 			}
 			# and set a title for the window
 			set title "Vpacman : Browse"
@@ -926,7 +926,7 @@ global debug_out depends_searches list_local win_mainx win_mainy
 			if {$filename != ""} {
 				.aurinstall.package configure -text ""
 				.aurinstall.packagename delete 0 end
-				.aurinstall.packagename insert 0 [string range [file tail $filename] 0 [string first ".pkg.tar.xz" [file tail $filename]]-1] 
+				.aurinstall.packagename insert 0 [string range [file tail $filename] 0 [string first ".pkg." [file tail $filename]]-1] 
 				.aurinstall.info configure -state disabled
 			} 
 		} \
@@ -988,8 +988,18 @@ global debug_out depends_searches list_local win_mainx win_mainy
 								# first check that the AUR installs are correct, if the basename is different to the package name then use that instead
 								set new_installs ""
 								foreach item $aur_installs {
+									puts $debug_out(3) "aur_install - test $item for against excludes list"
+									# ignore certain listed dependencies				
+									if {[lsearch -exact [list mime-types] $item] != -1} {
+										puts $debug_out(3) "aur_install - \"$item\" is in ignored list"
+										# so do not add item to the end of the list, just ignore it
+										continue
+									}
 									puts $debug_out(3) "aur_install - test $item for basename"
 									set result [get_aur_info $item]
+									# if get_aur_info returns 1 then there is no internet
+									if {$result == 1} {return 1}
+
 									set basename [lindex $result 0]
 									if {$basename == ""} {
 										puts $debug_out(3) "aur_install - $item does not exist in AUR so pass it on to be queried in aur_install_depends"
@@ -1114,6 +1124,8 @@ global aur_list debug_out
 			# if the basename is different then replace item with basename in installs list
 			puts $debug_out(3) "aur_install_depends - get the info for $item"
 			set info [get_aur_info $item]
+			if {$info == 1} {return 1}
+
 			set basename [split [lindex $info 0] " "]
 			if {$basename == ""} {set basename $item} else {set item $basename}
 			puts $debug_out(3) "aur_install_depends - package set to $basename"
@@ -1329,7 +1341,7 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 		# note that the available version was set to "" originally
 		if {$available_version != "\"\""} {
 ### temporarily remove any *
-			set available_version [string trimleft $available_version {*}]
+###			set available_version [string trimleft $available_version {*}]
 ###
 			puts $debug_out(2) "aur_upgrade - $package has been installed"
 			puts $debug_out(2) "aur_upgrade - The current version is $current_version, the version available is $available_version"
@@ -1380,6 +1392,8 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 			# check if the package exists in AUR
 			puts $debug_out(2) "aur_upgrade - call get_aur_info"
 			set result [get_aur_info $package]
+			if {$result == 1} {return 1}
+
 			# if the package does not exist then get_aur_info will return a list of five blank items
 			set basename [lindex $result 0]
 			if {$basename == ""} {
@@ -1405,6 +1419,8 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 			if {$type == "upgrade" || $type == "aur"} {
 				# check if the package exists in AUR
 				set result [get_aur_info $package]
+				if {$result == 1} {return 1}
+
 				# if the package does not exist then get_aur_info will return a list of five blank items
 				if {[lindex $result 0] == ""} {
 					puts $debug_out(1) "aur_upgrade - $package not found in AUR"
@@ -1479,7 +1495,7 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 		# This could be fine as long as the package was not built.
 		puts $debug_out(2) "aur_upgrade - WARNING - $tmp_dir/aur_upgrades/$package already exists"
 		# test for a pkg file, sort any files found and pick the last one 
-		set filename [lindex [lsort [glob -nocomplain -directory $tmp_dir/aur_upgrades/$package *.pkg.tar.xz]] end]
+		set filename [lindex [lsort [glob -nocomplain -directory $tmp_dir/aur_upgrades/$package *.pkg.*]] end]
 		puts $debug_out(2) "aur_upgrade - glob returned $filename"
 		if {$filename != ""} {
 			# this will cause a failure with "==> ERROR: A package has already been built."
@@ -1515,6 +1531,7 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 	if {$type != "install"} {
 		# download the AUR file to install or upgrade
 		puts $fid "echo \"\nDownload $package snapshot\n\""
+		# the package snapshot presently has the extention .tar.gz		
 		if {$dlprog == "curl"} {
 			puts $fid "curl -L -O \"https://aur.archlinux.org/cgit/aur.git/snapshot/$package.tar.gz\""
 		} else {
@@ -1527,15 +1544,11 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 		puts $fid "read ans"
 		puts $fid "case \"\$ans\" in"
 	    puts $fid "\tN*|n*)  ;;"
-###
-	    # should we use cat or more?
-	    # should we disallow the use of the editor?
 	    if {$editor == ""} {
 			puts $fid "\t*) cat PKGBUILD"
 		} else {
 			puts $fid "\t*) $editor PKGBUILD"
 		}
-###
 		puts $fid "\techo -n \"\nContinue? \[Y/n] \""
 		puts $fid "\tread ans"
 		puts $fid "\tcase \"\$ans\" in"
@@ -1545,12 +1558,12 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 	    puts $fid "esac"
 	    if {$su_cmd != "su -c"} {
 			puts $fid "echo -e \"\n$ makepkg -sci \n\""
-			puts $fid "makepkg -sci $asdepends 2>&1 >/dev/tty | tee $tmp_dir/errors"
+			puts $fid "makepkg -sci $asdepends > /dev/tty 2>&1 | tee $tmp_dir/errors"
 		} else {
 			puts $fid "echo -e \"\n$ makepkg -c \n\""
 			puts $fid "if makepkg -c ; then"
 			puts $fid "\techo -e \"\nInstalling $package using pacman -U  \n\""
-			puts $fid "\tsu -c \"pacman -U $asdepends $package\*.pkg.tar.xz\" 2>&1 >/dev/tty | tee $tmp_dir/errors"
+			puts $fid "\tsu -c \"pacman -U $asdepends $package\*.pkg.*\" > /dev/tty 2>&1 | tee $tmp_dir/errors"
 			puts $fid "else"
 			puts $fid "\techo -e \"\nCannot install dependencies now - install the missing dependencies and try again\n\""
 			puts $fid "fi"
@@ -1559,16 +1572,16 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 	} else {
 		puts $fid "echo -e \"\nInstalling $filename using pacman -U  \n\""
 		if {$su_cmd != "su -c"} {
-			puts $fid "$su_cmd pacman -U $filename 2>&1 >/dev/tty | tee $tmp_dir/errors"
+			puts $fid "$su_cmd pacman -U $filename > /dev/tty 2>&1 | tee $tmp_dir/errors"
 		} else {
-			puts $fid "su -c \"pacman -U $filename\" 2>&1 >/dev/tty | tee $tmp_dir/errors"
+			puts $fid "su -c \"pacman -U $filename\" > /dev/tty 2>&1 | tee $tmp_dir/errors"
 		}
 	}
 	if {$type == "upgrade"} {
 		set action "Upgrade AUR Package"
 		puts $fid "echo -ne \"\nUpgrade $package finished, press ENTER to close the terminal.\""
 	} elseif {$type == "aur" || $type == "install"} {
-		puts $fid "echo -ne \"\nInstall [string range [file tail $package] 0 [string first ".pkg.tar.xz" [file tail $package]]-1] finished, press ENTER to close the terminal.\""
+		puts $fid "echo -ne \"\nInstall [string range [file tail $package] 0 [string first ".pkg." [file tail $package]]-1] finished, press ENTER to close the terminal.\""
 		set action "Install Local Package"
 	} elseif {$type == "reinstall"} {
 		puts $fid "echo -ne \"\nReinstall $package finished, press ENTER to close the terminal.\""
@@ -1684,8 +1697,17 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 		}
 	}	
 
-	if {$vstate == "indate" || $result == "failed"} {
-		puts $debug_out(2) "\tPackage was indate ($vstate) or the result was failed ($result)"
+### if something changed then set result to success
+	if {[expr $count_upgrades + $count_downgrades + $count_installs] >= 1} {
+		puts $debug_out(2) "aur_upgrade - Some changes were recorded"
+		set result "success"
+	}
+
+#	if {$vstate == "indate" || $result == "failed"} 
+#		puts $debug_out(2) "\tPackage was indate ($vstate) or the result was failed ($result)"
+	if {$result == "failed"} {
+		puts $debug_out(2) "\tPackage was $vstate but the result was failed"
+###
 		# the local database will still be up to date
 		# if we only did a reinstall then there is nothing to do
 	} else {
@@ -1849,7 +1871,7 @@ bind bubble <Motion> {
 
 proc check_config_files {} {
 
-global debug_out diffprog su_cmd
+global debug_out diffprog home su_cmd
 # check /etc and /usr/bin for any configuration files which need to be updated
 
 	puts $debug_out(1) "check_config_files called"
@@ -1864,7 +1886,7 @@ global debug_out diffprog su_cmd
 		puts $debug_out(2) "check_config_files - findutils not installed - return1"
 		return 1
 	}
-	set error [catch {exec find /etc /usr/bin \( -name *.pacnew -o -name *.pacsave \) -print} files]
+	set error [catch {exec find /etc /usr/bin /var/lib \( -name *.pacnew -o -name *.pacsave \) -print} files]
 	puts $debug_out(2) "check_config_files - find command returned error $error and result $files"
 	if {$files == "child process exited abnormal"} {set files ""}
 	foreach file [split $files \n] {
@@ -1915,6 +1937,17 @@ global debug_out diffprog su_cmd
 			set file_list [string replace $file_list $index $index+31]
 		}
 		if {$diffprog != ""	} {	
+			# if the diff programme is meld and the share folder is not writeable then meld will start, throw an error, and then fail to exit
+			if {$diffprog == "meld"} {
+				if {[file isdirectory $home/.local/share/meld]} {
+					puts $debug_out(2) "check_config_files - meld directory exists"
+					if {![file writable $home/.local/share/meld]} {
+						puts $debug_out(2) "check_config_files - meld directory is not writeable"
+						set ans [tk_messageBox -default ok -detail "The comparison programme is set to Meld, but the share folder \"$home/.local/share/meld\" is not writable.\nChoose another comparison programme or correct the share permissions." -icon error -message "Warning: Meld share directory is not writable!" -parent . -title "Meld Error" -type ok]
+						return 1
+					}
+				}
+			}
 			set ans [tk_messageBox -default yes -detail "Would you like to try to deal with these configuration files now?" -icon info -message "Some saved configuration files were found." -parent . -title "Found Config Files" -type yesno]
 			if {$ans == "yes"} {
 				puts $debug_out(2) "check_config_files - now process the config file list"
@@ -3020,38 +3053,53 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 		# this does not mean that the update was successful since it may have failed after the sync time 
 		puts $debug_out(2) "execute - found the following successful upgrades \"[lsort $list_upgrades]\""
 		puts $debug_out(2) "execute - the upgrade list requested was $upgrade_list"
+		# see if all the upgrades expected were upgraded
 		set check_upgrade_list 0
 		foreach item $upgrade_list {
 			if {[lsearch $list_upgrades $item] != -1} {incr check_upgrade_list}
 		}
 		puts $debug_out(2) "execute - upgrade_all - $check_upgrade_list packages from [llength $upgrade_list] were upgraded."
+		# were any packages omitted? (It could be that more packages were updated than expected)
 		set omitted [expr [llength $upgrade_list] - $check_upgrade_list]
 		puts $debug_out(2) "execute - upgrade_all - $omitted packages were omitted"
-		# the ignored list from find_pacman_config is calculated from the list_outdated created before the sync from upgrade_all
-		set ignores [llength [find_pacman_config ignored]]
+		# are there any packages ignored?
+		# the ignored list from find_pacman_config is calculated from the pacman configuration file
+		set ignored_packages [find_pacman_config all_ignored]
+		set ignores [llength $ignored_packages]
 		puts $debug_out(2) "execute - upgrade_all - $ignores are set to ignore in the pacman config file"
+		# if the packages omitted are not simply the ignored packages, then check a bit further
 		if {$ignores != $omitted} {
-			puts $debug_out(2) "execute - upgrade_all - there are further errors in the upgrade."
-			# we can check whether there were any more ignored packages were in the actual upgrade list
+			puts $debug_out(2) "execute - upgrade_all - there are further possible errors in the upgrade."
+			# we can check whether there are only ignored packages in the actual upgrade list
+			# this eliminates any errors if additional, unexpected, packages were upgraded
 			set ignores 0
-			set ignored_packages [find_pacman_config all_ignored]
-			set outdated [split [exec pacman -Qqu] \n]
+			set outdated ""
+			# pacman -Qu returns an error if there are no updates found
+			set error [catch {exec pacman -Qqu} outdated]
+			if {$error == 0} {
+				# there are still outdated packages in the live database
+				set outdated [split $outdated \n]
+			}
+			# lets see if the packages that are still out of date after the full system upgrade are simply the ignored packages
 			foreach item $outdated {
 				if {[string first $item $ignored_packages] != -1} {incr ignores}
 			}
 			puts $debug_out(2) "execute - upgrade_all - reset $ignores package updates ignored in the pacman config file"
 		}
+		# so if the number of packages ignored plus the items upgraded equals the number of packages expected then the upgared completed as expected
 		if {[expr $check_upgrade_list + $ignores] == [llength $upgrade_list]} {
 			puts $debug_out(2) "execute - upgrade_all succeeded"
 			# remove any warning label and show the change immediately
 			remove_warning_icon .filter_icons_warning
 			update
+			# if packages were ignored then the system could be unstable
 			if {$ignores != 0} {
 				set action_message "Full System Upgrade succeeded but $ignores packages were ignored. The system may now be unstable."
 			}
 			# the counts and lists will need to be updated
 			set restart true
 		} else {
+			# if the upgrade_all failed then check the actual result
 			set error 1
 			puts $debug_out(2) "execute - upgrade_all failed"
 			# if the sync database was updated then we are out of sync
@@ -3142,7 +3190,7 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 		puts $debug_out(2) "execute - called the start procedure"
 		# call start
 		start
-		if {$aur} {
+		if {$aur || $selected_list == "aur_updates"} {
 			puts $debug_out(2) "execute - one or more packages are local, so do not call aur_versions_thread now, leave it to get_aur_versions when it is called by get_aur_updates"
 			set aur_versions ""
 			get_aur_updates
@@ -3222,7 +3270,7 @@ global debug_out su_cmd terminal_string tmp_dir
 	}
 	# now run the command - but send all the output to the terminal AND send any errors to the error file which can be analysed later if necessary
 	# tee will overwrite any existing error file without the -a flag
-	puts $fid "$command 2>&1 >/dev/tty | tee $tmp_dir/errors"
+	puts $fid "$command > /dev/tty 2>&1 | tee $tmp_dir/errors"
 
 	if {$wait} {
 		puts $fid "pid=\"$!\""
@@ -3690,6 +3738,8 @@ global debug_out depends_searches list_all list_installed list_local
 	while {$basename != $package} {
 		puts $debug_out(3) "get_aur_dependencies - get the info for $package"
 		set info [get_aur_info $package]
+		if {$info == 1} {return 1}
+
 		# add package to the list of previous searches
 		lappend depends_searches $package
 		set basename [split [lindex $info 0] " "]
@@ -3860,10 +3910,15 @@ global debug_out dlprog
 	}
 	puts $debug_out(2) "get_aur_info - called test_internet"
 	if {[test_internet] != 0} {return 1}
+	set package [string map {+ %2B} $package] 
 	if {$dlprog == "curl"} {
-		set line [eval [concat exec curl -Lfs "https://aur.archlinux.org//rpc/?v=5&type=info&arg[]=$package"]]
+		set error [catch {eval [concat exec curl -Lfs "https://aur.archlinux.org//rpc/?v=5&type=info&arg[]=$package"]} line]
 	} else {
-		set line [eval [concat exec wget -LqO - "https://aur.archlinux.org//rpc/?v=5&type=info&arg[]=$package"]]
+		set error [catch {eval [concat exec wget -LqO - "https://aur.archlinux.org//rpc/?v=5&type=info&arg[]=$package"]} line]
+	}
+	if {$error != 0} {
+		puts $debug_out(1) "get_aur_info could not get info for $package - error was $error : $line"
+		return 1
 	}
 	set info [read_aur_info $line]
 	puts $debug_out(2) "get_aur_info - read_aur_info returned: $info"
@@ -3903,7 +3958,7 @@ global aur_list debug_out dlprog tmp_dir
 			set error 1
 			puts $debug_out(2) "get_aur_list - failed to download package.gz"
 		}
-	}
+	}	
 	# if the error is not 0 then either there was no internet or the download failed
 	# see what packages file is available, if any
 	if {$error != 0} {
@@ -4352,6 +4407,8 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 		put_aur_versions $aur_versions	
 		# and reset aur_only
 		set aur_only true
+	} else {
+		puts $debug_out(2) "get_aur_updates - aur_versions is already set to $aur_versions"
 	}
 	puts $debug_out(2) "get_aur_updates - aur_versions is available"
 	# now just check for any errors and find the updates
@@ -4453,13 +4510,19 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 		set fid [open "$tmp_dir/get_aur_versions.sh" w]
 		puts $fid "#!/bin/bash"
 		if {$dlprog == "curl"} {
-			puts $fid "curl -LfGs \"https://aur.archlinux.org//rpc/?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\""
+			puts $fid "curl -LfGs \"https://aur.archlinux.org//rpc/?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\" 2>&1"
 		} else {
-			puts $fid "wget -LqO - \"https://aur.archlinux.org//rpc/?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\""
+			puts $fid "wget -LqO - \"https://aur.archlinux.org//rpc/?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\" 2>&1"
 		}
+		puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 		close $fid
 		exec chmod 0755 "$tmp_dir/get_aur_versions.sh"
-		exec "$tmp_dir/get_aur_versions.sh"
+		set error [catch {exec "$tmp_dir/get_aur_versions.sh"}]
+		if {$error != 0} {
+			puts $debug_out(1) "get_aur_versions - error getting version info ([expr [clock milliseconds] - $start_time])"
+			tk_messageBox -default ok -detail "Try again later" -icon error -message "Unable to get version information for AUR/Local packages." -parent . -title "Error getting AUR versions" -type ok
+			return 1
+		}
 		file delete "$tmp_dir/get_aur_versions.sh"
 		puts $debug_out(2) "get_aur_versions - found result ([expr [clock milliseconds] - $start_time])"
 		# read the results into a variable 
@@ -4632,11 +4695,9 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 				grid remove .wp.wftwo.ydataview_files_scroll
 				grid .wp.wftwo.ydataview_info_scroll -in .wp.wftwo -row 1 -column 2 \
 					-sticky ns
-				# If this is a local package it will take up to half a second to get the available versions
-				# so we need to implement a note to say why we are waiting
 				.wp.wftwo.dataview.info insert 1.0 "Repository      : $repo\n"
 				#  if we know of a browser, and this is a local package then use the package name to make a URL and insert tags accordingly
-				if {$aur_only == true && $browser != ""} {
+				if {$repo == "local" && $browser != ""} {
 					# click on the link to view it in the selected browser
 					.wp.wftwo.dataview.info tag bind get_aur <ButtonRelease-1> "exec $browser https://aur.archlinux.org/packages/$package &"
 					# add the normal text to the text box
@@ -4722,11 +4783,11 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 					set count 0
 					foreach row $result {
 						incr count
-						# of this is row 1 then change the wording to Repository : ....
+						# if this is row 1 then change the wording to Repository : ....
 						if {$count == 1} {
-							.wp.wftwo.dataview.moreinfo insert end "Repository[string repeat " " [expr $index - 10]]: $repo\n" 
+							.wp.wftwo.dataview.moreinfo insert end "Repository[string repeat { } [expr $index - 10]]: $repo\n" 
 						#  if we know of a browser, and this is a local package then use the package name to make a URL and insert tags accordingly
-						} elseif {$aur_only == true && $browser != "" && $count == 2} {
+				} elseif {$repo == "local" && $browser != "" && $count == 2} {
 							# click on the link to view it in the selected browser
 							.wp.wftwo.dataview.moreinfo tag bind get_aur <ButtonRelease-1> "puts $debug_out(2) \"GET AUR URL\"; exec $browser https://aur.archlinux.org/packages/[string range $row [expr $index + 2] end] &"
 							# add the normal text to the text box
@@ -4745,25 +4806,27 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 							# All this section is repeated from above and should probably be in a procedure
 							if {[string first "Version" $row] == 0} {
 								if {$available == "{}"} {
-									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat " " [expr $index -9]]: no\n"
-									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat " " [expr $index -9]]: $version\n"
+									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat { } [expr $index -9]]: no\n"
+									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat { } [expr $index -9]]: $version\n"
 								} elseif {$available == "-na-"} {
 									# so the thread lookup did not work, so get the available version now
 									puts $debug_out(2) "get_dataview - moreinfo - available was -na-"
-									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat " " [expr $index -9]]: $version\n"
-									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat " " [expr $index -9]]: Searching ...\n"
+									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat { } [expr $index -9]]: $version\n"
+									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat { } [expr $index -9]]: Searching ...\n"
 									update
 									# since this is an AUR package or another local install
 									# we can use an RPC to get the latest version number
 									set result [get_aur_info $package]
 									set version [lindex $result 1]
 									if {$version == ""} {set version "not found in AUR"}
+									# the following deletes the last newline character, which it is not supposed to do
 									.wp.wftwo.dataview.moreinfo delete [expr [.wp.wftwo.dataview.moreinfo count -lines 0.0 end] -1].0 end
-									.wp.wftwo.dataview.moreinfo insert end ""Available[string repeat " " [expr $index -9]]: $version\n""
+									# so we put it back here. This may be a bug in tk so check new releases.
+									.wp.wftwo.dataview.moreinfo insert end "\nAvailable[string repeat { } [expr $index -9]]: $version\n"
 									puts $debug_out(2) "get_dataview - moreinfo - version available is $version"
 								} else {
-									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat " " [expr $index -9]]: $version\n"
-									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat " " [expr $index -9]]: $available\n"
+									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat { } [expr $index -9]]: $version\n"
+									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat { } [expr $index -9]]: $available\n"
 								}
 							} else {
 								.wp.wftwo.dataview.moreinfo insert end "$row\n"
@@ -4803,7 +4866,7 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 							if {![file exists /var/cache/pkgfile/$repo.files]} {
 								puts $debug_out(2) "get_dataview - files - there is no files database available run check_repo_files"
 								# looks like the files database is missing, try to update the databases
-								set error [check_repo_files $tmp_dir files]
+								set error [check_repo_files /var/cache/pkgfile files]
 								puts $debug_out(2) "get_dataview - files - check_repo_files (pkgfile) returned $error"
 							} else {
 								puts $debug_out(2) "get_dataview - files - there is a files database available check if it is in date"
@@ -5087,9 +5150,9 @@ global debug_out start_time su_cmd terminal terminal_string tmp_dir
 				puts $fid "#!/bin/sh"
 				puts $fid "password=\$1"
 				if {$su_cmd == "su -c"} {
-					puts $fid "echo \$password | $su_cmd \"pacman --noconfirm -S xterm\" 2>&1 >$tmp_dir/errors"
+					puts $fid "echo \$password | $su_cmd \"pacman --noconfirm -S xterm\" > $tmp_dir/errors 2>&1"
 				} else {
-					puts $fid "echo \$password | $su_cmd -S -p \"\" pacman --noconfirm -S xterm 2>&1 >$tmp_dir/errors"
+					puts $fid "echo \$password | $su_cmd -S -p \"\" pacman --noconfirm -S xterm > $tmp_dir/errors 2>&1"
 				}
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 				close $fid
@@ -5505,7 +5568,7 @@ global debug_out list_local_ids list_show list_show_ids listview_selected_in_ord
 					if {$test == "newer"} {
 						.wp.wfone.listview tag add outdated $id
 ### temporarily add an asterix to the new version number
-.wp.wfone.listview item $id -values [lreplace $element 3 3 "*[lrange $element 3 3]"]
+###.wp.wfone.listview item $id -values [lreplace $element 3 3 "*[lrange $element 3 3]"]
 ###
 					} elseif {$test == "older"} {
 						# the available versions seems to be older, but just mark it as installed for now
@@ -5516,7 +5579,7 @@ global debug_out list_local_ids list_show list_show_ids listview_selected_in_ord
 				}
 			} else {
 ### temporarily add an asterix to the new version number
-.wp.wfone.listview item $id -values [lreplace $element 3 3 "*[lrange $element 3 3]"]
+###.wp.wfone.listview item $id -values [lreplace $element 3 3 "*[lrange $element 3 3]"]
 ###
 				.wp.wfone.listview tag add outdated $id
 			}
@@ -5974,16 +6037,16 @@ global debug_out mirror_countries su_cmd tmp_dir
 		puts $fid "password=\$1"
 		# copy over the mirrorlist and the backup file
 		if {$su_cmd == "su -c"} {
-			puts $fid "echo \$password | $su_cmd \"cp -f $tmp_dir/mirrorlist /etc/pacman.d\" 2>&1 >$tmp_dir/errors"
+			puts $fid "echo \$password | $su_cmd \"cp -f $tmp_dir/mirrorlist /etc/pacman.d\" > $tmp_dir/errors 2>&1"
 			if {$source == "/etc/pacman.d/mirrorlist.pacnew"} {
 				# move the .pacnew file to the backup file
-				puts $fid "echo \$password | $su_cmd \"mv -f $source /etc/pacman.d/mirrorlist.backup\" 2>&1 >>$tmp_dir/errors"
+				puts $fid "echo \$password | $su_cmd \"mv -f $source /etc/pacman.d/mirrorlist.backup\" >> $tmp_dir/errors 2>&1"
 			}
 		} else {
-			puts $fid "echo \$password | $su_cmd -S -p \"\" cp -f $tmp_dir/mirrorlist /etc/pacman.d 2>&1 >$tmp_dir/errors"
+			puts $fid "echo \$password | $su_cmd -S -p \"\" cp -f $tmp_dir/mirrorlist /etc/pacman.d > $tmp_dir/errors 2>&1"
 			if {$source == "/etc/pacman.d/mirrorlist.pacnew"} {
 				# move the .pacnew file to the backup file
-				puts $fid "echo \$password | $su_cmd -S -p \"\" mv -f $source /etc/pacman.d/mirrorlist.backup 2>&1 >>$tmp_dir/errors"
+				puts $fid "echo \$password | $su_cmd -S -p \"\" mv -f $source /etc/pacman.d/mirrorlist.backup >> $tmp_dir/errors 2>&1"
 			}
 		}
 		close $fid
@@ -6410,7 +6473,7 @@ global aur_all aur_versions debug_out filter filter_list find group list_all lis
 			# and add any new tags required
 			if {$is_update} {
 ### temporarily add an asterix to the new version number
-.wp.wfone.listview item $treeview_index -values [lreplace $element 3 3 "*[lrange $element 3 3]"]
+###.wp.wfone.listview item $treeview_index -values [lreplace $element 3 3 "*[lrange $element 3 3]"]
 ###
 				.wp.wfone.listview tag add outdated $treeview_index
 			} else {
@@ -6725,12 +6788,37 @@ global browser debug_out dlprog home
 				regsub -all {&amp;lt;} $element {<} element
 				regsub -all {&quot;} $element {"} element
 				regsub -all {&apos;} $element {'} element
+		 		# remove any linebreaks which are not part of a <pre> statement
+				set new_element ""
+				set from 0
+				set to [expr [string first "<pre>" $element] - 1]
+				if {$to < 0} {set to "end"}
+				while {$to != -1} {
+					set sub_element [string map {\n \ } [string range $element $from $to]]
+					append new_element $sub_element
+					# unless we are at the end
+					if {$to == "end"} {break}
+					# add in the <pre> statement as is
+					set from $to
+					set to [expr [string first "</pre>" $element $from] + 6]
+					set sub_element "[string range $element $from $to]"
+					append new_element $sub_element 
+					# next while
+					# set from to the end of the </pre> statement
+					set from $to
+					set to [expr [string first "<pre>" $element $from] - 1]
+					if {$to < 0} {set to "end"}
+				}
+				set element $new_element
+				# remove other line breaks, which are normally not required, unless they are not at the end of a line
+				set element [string map {<br>\n \n <br/>\n \n <br\ />\n \n} $element]
+				set element [string map {<br> \n <br/> \n <br\ /> \n} $element]
 				# remove paragraph tags and replace them with carriage returns
 				set element [string map {<p> \n} $element]
 				set element [string map {</p> \n} $element]
 				#remove hyperlinks
 				regsub -all {<a href=.*?>} $element {} element
-				# remove numbered list
+				# remove bullet list
 				regsub -all {<li>} $element { } element	
 				# remove numbered list			
 				regsub -all {<ul>} $element { } element
@@ -6750,6 +6838,7 @@ global browser debug_out dlprog home
 		incr count
 	}
 	puts $debug_out(2) "read_news rss parsed"
+	puts $debug_out(2) "\t$news_list"
 	view_text $news_list "Latest News"
 	puts $debug_out(1) "read_news rss completed"
 }
@@ -7194,7 +7283,7 @@ global debug_out is_connected start_time
 	set try(1) "www.yahoo.com"
 	set try(2) "www.bing.com"
 	while {$count < 3} {
-		set error [catch {eval [concat exec timeout 1 ping -c 1 $try($count)]} result]
+		set error [catch {eval [concat exec timeout 3 ping -c 1 $try($count)]} result]
 		puts $debug_out(2) "test_internet - $count returned $error $result"
 		if {$error == 0} {
 			set is_connected true
@@ -7208,9 +7297,6 @@ global debug_out is_connected start_time
 	# if we reach this point and $is_connected was true then write an error message, if $is_connected is already false then just carry on
 	if {$is_connected} {
 		set ans [tk_messageBox -default ok -detail "" -icon warning -message "No Internet - Please check your internet connection and try again" -parent . -title "Warning" -type ok]
-	} else {
-		set_message terminal "NO INTERNET CONNECTION"
-		after 5000 {set_message terminal ""}
 	}
 	set is_connected false
 	place_warning_icon .filter_icons_disconnected
@@ -7372,7 +7458,8 @@ global debug_out start_time
 				puts $debug_out(1) "test_versions - numeric compare indicates available is older"
 				return "older"
 			}
-		} else {
+		# next check if strings can be compared
+		} elseif {[string length [lindex $new_version $count]] == [string length [lindex $old_version $count]] || ([string is alpha [lindex $new_version $count]] && [string is alpha [lindex $old_version $count]])} {
 			puts $debug_out(3) "test_versions - compare \[string compare [lindex $new_version $count] [lindex $old_version $count]\] "
 			set result [string compare [lindex $new_version $count] [lindex $old_version $count]]
 			puts $debug_out(3) "test_versions - compare returned $result"
@@ -7383,7 +7470,74 @@ global debug_out start_time
 				puts $debug_out(1) "test_versions - compare strings indicates that available is older"
 				return "older"
 			}
-		}	
+		# otherwise compare two alphanumeric strings of unequal length
+		} else {
+			puts $debug_out(3) "test_versions - complex compare [lindex $new_version $count] with [lindex $old_version $count]"
+			set string1 [lindex $new_version $count]
+			set string2 [lindex $old_version $count]
+			set index1 0
+			set index2 0
+			
+			while true {
+				# does each string start with an alpha sub string
+				set result [string is alpha -failindex failindex1 $string1]
+				# is string1 alpha
+				if {$result == 1} {
+					puts $debug_out(3) "test_versions - complex compare $string1 is alpha"
+				} elseif {$failindex1 != 0} {
+					puts $debug_out(3) "test_versions - complex compare $string1 is alphanumeric"
+				} else {
+					puts $debug_out(3) "test_versions - complex compare $string1 is numeric"
+				}
+				# is string2 alpha
+				set result [string is alpha -failindex failindex2 $string2]
+				if {$result == 1} {
+					puts $debug_out(3) "test_versions - complex compare $string2 is alpha"
+				} elseif {$failindex2 != 0} {
+					puts $debug_out(3) "test_versions - complex compare $string2 is alphanumeric"
+				} else {
+					puts $debug_out(3) "test_versions - complex compare $string2 is numeric"
+				}
+				set sub_string1 [string range $string1 $index1 $failindex1-1]
+				set sub_string2 [string range $string2 $index2 $failindex2-1]
+				if {$sub_string1 != "" && $sub_string2 != ""} {
+					puts $debug_out(3) "test_versions - complex compare $sub_string1 with $sub_string2"
+				}
+				if {$failindex1 == 0 && $failindex2 != 0} {
+					puts $debug_out(1) "test_versions - complex compare $sub_string1 is newer (is integer)"
+					return "newer"
+				} elseif {$failindex1 != 0 && $failindex2 == 0} {
+					puts $debug_out(1) "test_versions - complex compare $sub_string1 is older (is alpha not integer)"
+					return "older"
+				} elseif {$failindex1 == 0 && $failindex2 == 0} {
+					puts $debug_out(3) "test_versions - complex sub_strings are both integers"
+					if {$string1 > $string2} {
+						puts $debug_out(1) "test_versions - complex compare values indicates that available is newer"
+						return "newer"
+					} elseif {$string1 < $string2} {
+						puts $debug_out(1) "test_versions - complex compare values indicates that available is older"
+						return "older"
+					}
+				} else {
+					set sub_string1 [string range $string1 $index1 $failindex1-1]
+					set sub_string2 [string range $string2 $index2 $failindex2-1]
+					set result [string compare $sub_string1 $sub_string2]
+					puts $debug_out(3) "test_versions - complex compare $sub_string1 with $sub_string2 returned $result"
+					if {$result == 1} {
+						puts $debug_out(1) "test_versions - complex compare strings indicates that available is newer"
+						return "newer"
+					} elseif {$result == -1} {
+						puts $debug_out(1) "test_versions - complex compare strings indicates that available is older"
+						return "older"
+					}
+				}
+				puts $debug_out(3) "test_versions - complex compare indicates the strings are the same"
+				set string1 [string range $string1 $failindex1 end]
+				set string2 [string range $string2 $failindex2 end]
+				set index1 $failindex1 
+				set index2 $failindex2
+			}
+		}
 		incr count
 	}
 	if {$new_build > $old_build} {
@@ -7481,14 +7635,14 @@ global debug_out su_cmd tmp_dir win_mainx win_mainy
 			puts $fid "#!/bin/sh"
 			puts $fid "password=\$1"
 			if {$su_cmd == "su -c"} {
-				puts $fid "echo \$password | $su_cmd \"cp -p /etc/pacman.conf /etc/pacman.conf.bak\" 2>&1 >/dev/null"
+				puts $fid "echo \$password | $su_cmd \"cp -p /etc/pacman.conf /etc/pacman.conf.bak\" > /dev/null 2>&1"
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
-				puts $fid "echo \$password | $su_cmd \"cp $tmp_dir/pacman.conf /etc/pacman.conf\" 2>&1 >/dev/null"
+				puts $fid "echo \$password | $su_cmd \"cp $tmp_dir/pacman.conf /etc/pacman.conf\" > /dev/null 2>&1"
 				puts $fid "if \[ $? -ne 0 \]; then exit 2; fi"
 			} else {
-				puts $fid "echo \$password | $su_cmd -S -p \"\" cp -p /etc/pacman.conf /etc/pacman.conf.bak 2>&1 >/dev/null"
+				puts $fid "echo \$password | $su_cmd -S -p \"\" cp -p /etc/pacman.conf /etc/pacman.conf.bak > /dev/null 2>&1"
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
-				puts $fid "echo \$password | $su_cmd -S -p \"\" cp $tmp_dir/pacman.conf /etc/pacman.conf 2>&1 >/dev/null"
+				puts $fid "echo \$password | $su_cmd -S -p \"\" cp $tmp_dir/pacman.conf /etc/pacman.conf > /dev/null 2>&1"
 				puts $fid "if \[ $? -ne 0 \]; then exit 2; fi"
 			}
 			close $fid
@@ -7691,14 +7845,14 @@ global backup_dir backup_log debug_out keep_log su_cmd win_mainx win_mainy
 							if {$backup_log == yes} {
 								puts $debug_out(2) "trim_log - Copy log file to backup"
 								if {$su_cmd == "su -c"} {
-									puts $fid "echo \$password | $su_cmd \"cp $logfile $backup_dir/[file tail $logfile].bak\" 2>&1 >$tmp_dir/errors"
+									puts $fid "echo \$password | $su_cmd \"cp $logfile $backup_dir/[file tail $logfile].bak\" > $tmp_dir/errors 2>&1"
 									puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
-									puts $fid "echo \$password | $su_cmd \"cp $tmp_dir/pacman.log.tmp $logfile\" 2>&1 >$tmp_dir/errors"
+									puts $fid "echo \$password | $su_cmd \"cp $tmp_dir/pacman.log.tmp $logfile\" > $tmp_dir/errors 2>&1"
 									puts $fid "if \[ $? -ne 0 \]; then exit 2; fi"
 								} else {
-									puts $fid "echo \$password | $su_cmd -S -p \"\" cp $logfile $backup_dir/[file tail $logfile].bak 2>&1 >$tmp_dir/errors"
+									puts $fid "echo \$password | $su_cmd -S -p \"\" cp $logfile $backup_dir/[file tail $logfile].bak > $tmp_dir/errors 2>&1"
 									puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
-									puts $fid "echo \$password | $su_cmd -S -p \"\" cp $tmp_dir/pacman.log.tmp $logfile 2>&1 >$tmp_dir/errors"
+									puts $fid "echo \$password | $su_cmd -S -p \"\" cp $tmp_dir/pacman.log.tmp $logfile > $tmp_dir/errors 2>&1"
 									puts $fid "if \[ $? -ne 0 \]; then exit 2; fi"
 								}
 								
@@ -7873,30 +8027,30 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 		foreach {file permissions owner group} $source_files {
 			if {$su_cmd == "su -c"} {
 				puts $debug_out(2) "update_config_files - copy source file $file $tmp_dir/config_files/$destination"
-				puts $fid "echo \$password | $su_cmd \"cp -p $file $tmp_dir/config_files/$file\" 2>&1 >/dev/null"
+				puts $fid "echo \$password | $su_cmd \"cp -p $file $tmp_dir/config_files/$file\" > /dev/null 2>&1"
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
-				puts $fid "echo \$password | $su_cmd \"chmod 0666 $tmp_dir/config_files/$file\" 2>&1 >/dev/null"
+				puts $fid "echo \$password | $su_cmd \"chmod 0666 $tmp_dir/config_files/$file\" > /dev/null 2>&1"
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 				set destination [lindex $destination_files $index]
 				if {$destination != "-none-"} {
 					puts $debug_out(2) "update_config_files - copy $destination $tmp_dir/config_files/$destination"
-					puts $fid "echo \$password | $su_cmd \"cp -p $destination $tmp_dir/config_files/$destination\" 2>&1 >/dev/null"
+					puts $fid "echo \$password | $su_cmd \"cp -p $destination $tmp_dir/config_files/$destination\" > /dev/null 2>&1"
 					puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
-					puts $fid "echo \$password | $su_cmd \"chmod 0666 $tmp_dir/config_files/$destination\" 2>&1 >/dev/null"
+					puts $fid "echo \$password | $su_cmd \"chmod 0666 $tmp_dir/config_files/$destination\" > /dev/null 2>&1"
 					puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 				}
 			} else {
 				puts $debug_out(2) "update_config_files - copy source file $file $tmp_dir/config_files/$destination"
-				puts $fid "echo \$password | $su_cmd -S -p \"\" cp -p $file $tmp_dir/config_files/$file 2>&1 >/dev/null"
+				puts $fid "echo \$password | $su_cmd -S -p \"\" cp -p $file $tmp_dir/config_files/$file > /dev/null 2>&1"
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
-				puts $fid "echo \$password | $su_cmd -S -p \"\" chmod 0666 $tmp_dir/config_files/$file 2>&1 >/dev/null"
+				puts $fid "echo \$password | $su_cmd -S -p \"\" chmod 0666 $tmp_dir/config_files/$file > /dev/null 2>&1"
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 				set destination [lindex $destination_files $index]
 				if {$destination != "-none-"} {
 					puts $debug_out(2) "update_config_files - copy destination file $destination $tmp_dir/config_files/$destination"
-					puts $fid "echo \$password | $su_cmd -S -p \"\" cp -p $destination $tmp_dir/config_files/$destination 2>&1 >/dev/null"
+					puts $fid "echo \$password | $su_cmd -S -p \"\" cp -p $destination $tmp_dir/config_files/$destination > /dev/null 2>&1"
 					puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
-					puts $fid "echo \$password | $su_cmd -S -p \"\" chmod 0666 $tmp_dir/config_files/$destination 2>&1 >/dev/null"
+					puts $fid "echo \$password | $su_cmd -S -p \"\" chmod 0666 $tmp_dir/config_files/$destination > /dev/null 2>&1"
 					puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 				}
 			
@@ -8034,7 +8188,7 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 				switch $action {
 					Compare {
 						# compare and modify source and destination
-						exec $diffprog "$tmp_dir/config_files/$source" "$tmp_dir/config_files/$destination"
+						exec $diffprog "$tmp_dir/config_files/$source" "$tmp_dir/config_files/$destination" 
 						# we can do this more than once
 					}
 					Copy {
@@ -8319,20 +8473,20 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 						puts $debug_out(2) "update_config_files - chmod $file and copy $file to $path"
 						if {$su_cmd == "su -c"} {
 							# only copy the file back if it has changed
-							puts $fid "echo \$password | $su_cmd \"cmp $file $path\" 2>&1 >/dev/null"
+							puts $fid "echo \$password | $su_cmd \"cmp $file $path\" > /dev/null 2>&1"
 							puts $fid "if \[ \$? -ne 0 \]; then"
-							puts $fid "\techo \$password | $su_cmd \"chmod $permissions $file\" 2>&1 >/dev/null"
+							puts $fid "\techo \$password | $su_cmd \"chmod $permissions $file\" > /dev/null 2>&1"
 							puts $fid "\tif \[ \$? -ne 0 \]; then exit 1; fi"
-							puts $fid "\techo \$password | $su_cmd \"cp -p $file $path\" 2>&1 >/dev/null"
+							puts $fid "\techo \$password | $su_cmd \"cp -p $file $path\" > /dev/null 2>&1"
 							puts $fid "\tif \[ \$? -ne 0 \]; then exit 1; fi"
 							puts $fid "fi"
 						} else {
 							# only copy the file back if it has changed
-							puts $fid "echo \$password | $su_cmd -S -p \"\" cmp $file $path  2>&1 >/dev/null"
+							puts $fid "echo \$password | $su_cmd -S -p \"\" cmp $file $path > /dev/null 2>&1"
 							puts $fid "if \[ \$? -ne 0 \]; then"
-							puts $fid "\techo \$password | $su_cmd -S -p \"\" chmod $permissions $file 2>&1 >/dev/null"
+							puts $fid "\techo \$password | $su_cmd -S -p \"\" chmod $permissions $file > /dev/null 2>&1"
 							puts $fid "\tif \[ \$? -ne 0 \]; then exit 1; fi"
-							puts $fid "\techo \$password | $su_cmd -S -p \"\" cp -p $file $path 2>&1 >/dev/null"
+							puts $fid "\techo \$password | $su_cmd -S -p \"\" cp -p $file $path > /dev/null 2>&1"
 							puts $fid "\tif \[ \$? -ne 0 \]; then exit 1; fi"
 							puts $fid "fi"
 						}
@@ -8340,10 +8494,10 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 					if {[llength $delete_files] != 0} {
 						puts $debug_out(2) "update_config_files - delete $delete_files"
 						if {$su_cmd == "su -c"} {
-							puts $fid "echo \$password | $su_cmd \"rm $delete_files\" 2>&1 >/dev/null"
+							puts $fid "echo \$password | $su_cmd \"rm $delete_files\" > /dev/null 2>&1"
 							puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 						} else {
-							puts $fid "echo \$password | $su_cmd -S -p \"\" rm $delete_files 2>&1 >/dev/null"
+							puts $fid "echo \$password | $su_cmd -S -p \"\" rm $delete_files > /dev/null 2>&1"
 							puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 						}
 					} else {
@@ -8541,18 +8695,18 @@ global debug_out home su_cmd tmp_dir
 		set cups_gen_return [catch {exec which cups-genppdupdate}]
 		if {$cups_gen_return != 1} {
 			puts $debug_out(2) "update_cups added cups-genppdupdate to the commands to run"
-			puts $fid "cups-genppdupdate 2>&1 >$tmp_dir/errors"
+			puts $fid "cups-genppdupdate > $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 		}
 		if {$su_cmd == "su -c"} {
-			puts $fid "echo \$password | $su_cmd \"systemctl daemon-reload\" 2>&1 >>$tmp_dir/errors"
+			puts $fid "echo \$password | $su_cmd \"systemctl daemon-reload\" >> $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 2; fi"
-			puts $fid "echo \$password | $su_cmd \"systemctl restart org.cups.cupsd\" 2>&1 >>$tmp_dir/errors"
+			puts $fid "echo \$password | $su_cmd \"systemctl restart org.cups.cupsd\" >> $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 3; fi"
 		} else {
-			puts $fid "echo \$password | $su_cmd -S -p \"\" systemctl daemon-reload 2>&1 >>$tmp_dir/errors"
+			puts $fid "echo \$password | $su_cmd -S -p \"\" systemctl daemon-reload >> $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 2; fi"
-			puts $fid "echo \$password | $su_cmd -S -p \"\" systemctl restart org.cups.cupsd 2>&1 >>$tmp_dir/errors"
+			puts $fid "echo \$password | $su_cmd -S -p \"\" systemctl restart org.cups.cupsd >> $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 3; fi"
 		}
 		close $fid
@@ -9123,6 +9277,29 @@ frame .buttonbar
 		break
 	}
 	
+	# set up a popup menu for find
+	option add *tearOff 0
+	set entry_find_popup [menu .buttonbar.entry_find_popup -cursor left_ptr]
+	$entry_find_popup add command -label "Copy" -command {
+		clipboard append [selection get]
+		selection clear -displayof .buttonbar.entry_find
+	} 
+	$entry_find_popup add command -label "Paste" -command {
+		catch {.buttonbar.entry_find delete sel.first sel.last}
+		update idletasks
+		.buttonbar.entry_find insert insert [clipboard get]
+	}
+	
+	# and set up the binding for it
+	bind .buttonbar.entry_find <ButtonRelease-3> {
+		if {![.buttonbar.entry_find selection present]} {
+			$entry_find_popup entryconfigure 0 -state disabled
+		} else {
+			$entry_find_popup entryconfigure 0 -state normal
+		}
+		tk_popup $entry_find_popup %X %Y 0
+	}
+
 	# remove any selection before pasting from the clipboard with Shift-Insert
 	bind .buttonbar.entry_find <Shift-Insert> {
 		catch {.buttonbar.entry_find delete sel.first sel.last}
@@ -9175,6 +9352,30 @@ frame .buttonbar
 		.buttonbar.entry_findfile icursor [expr [.buttonbar.entry_findfile index insert] + 1]
 		break
 	}
+	
+	# set up a popup menu for findfile
+	option add *tearOff 0
+	set entry_findfile_popup [menu .buttonbar.entry_findfile_popup -cursor left_ptr]
+	$entry_findfile_popup add command -label "Copy" -command {
+		clipboard append [selection get]
+		selection clear -displayof .buttonbar.entry_findfile
+	} 
+	$entry_findfile_popup add command -label "Paste" -command {
+		catch {.buttonbar.entry_findfile delete sel.first sel.last}
+		update idletasks
+		.buttonbar.entry_findfile insert insert [clipboard get]
+	}
+	
+	# and set up the binding for it
+	bind .buttonbar.entry_findfile <ButtonRelease-3> {
+		if {![.buttonbar.entry_findfile selection present]} {
+			$entry_findfile_popup entryconfigure 0 -state disabled
+		} else {
+			$entry_findfile_popup entryconfigure 0 -state normal
+		}
+		tk_popup $entry_findfile_popup %X %Y 0
+	}
+	
 	# remove any selection before pasting from the clipboard with Shift-Insert
 	bind .buttonbar.entry_findfile <Shift-Insert> {
 		catch {.buttonbar.entry_findfile delete sel.first sel.last}
@@ -9182,6 +9383,7 @@ frame .buttonbar
 		.buttonbar.entry_findfile insert insert [clipboard get]
 		break
 	}
+	
 	bind .buttonbar.entry_findfile <Return> {
 		puts $debug_out(1) "Return key ran findfile \"$findfile\""
 		if {$findfile != ""} {
@@ -9509,9 +9711,11 @@ frame .filters
 			if {$aur_all} {
 				puts $debug_out(2) ".filter_list_aur_updates - configured text \"AUR/Local Updates ([llength $list_local])\""
 				.filter_list_aur_updates configure -text "AUR/Local Updates ([llength $list_local])"
+				balloon_set .filter_list_aur_updates "List all AUR/Local packages which have been installed"
 			} else {
 				puts $debug_out(2) ".filter_list_aur_updates - configured text to local_newer \"AUR/Local Updates ($local_newer)\""
 				.filter_list_aur_updates configure -text "AUR/Local Updates ($local_newer)"
+				balloon_set .filter_list_aur_updates "List only local packages which may need to be updated"
 			}
 			if {$selected_list == "aur_updates"} {
 				get_aur_updates
@@ -9557,9 +9761,7 @@ frame .filters
 					set pkgfile_updates 0
 				} elseif {$error == 0} {
 					set error [test_files_data pkgfile]
-					if {$error == 0 || $error == 3} {
-						set pkgfile_updates 0
-					}
+					set pkgfile_updates 0
 				}
 			} else {
 				# do the database files exist
@@ -9569,9 +9771,7 @@ frame .filters
 					set pacman_files_upgrade 0
 				} elseif {$error == 0} {
 					set error [test_files_data pacman]
-					if {$error == 0 || $error == 3} {
-						set pacman_files_upgrade 0
-					}
+					set pacman_files_upgrade 0
 				}
 			}
 		}
@@ -9744,10 +9944,18 @@ frame .wp.wfone \
 
 		bind .wp.wfone.listview <Tab> {focus .buttonbar.upgrade_button; break}
 		bind .wp.wfone.listview <<PrevWindow>> {focus .filter_list_aur_updates_all}
-
 		bind .wp.wfone.listview <Down> {
+			# remove the tag from the current item
 			.wp.wfone.listview tag remove focussed $tv_index
+			# check that there is a next item
 			if {[.wp.wfone.listview next $tv_index] != ""} {
+				# if there is then check that the next item is not selected as well
+				# and check that this is not the anchor
+				# if all this is true deselect the item and select the next one
+				if {[lsearch [.wp.wfone.listview selection] $tv_index] != -1 && [lsearch [.wp.wfone.listview selection] [.wp.wfone.listview next $tv_index]] != -1 && $tv_index != $anchor} {
+					.wp.wfone.listview selection remove $tv_index
+					set listlast $tv_index
+				}
 				set tv_index [.wp.wfone.listview next $tv_index]
 			}
 			.wp.wfone.listview tag add focussed $tv_index
@@ -9755,22 +9963,66 @@ frame .wp.wfone \
 			break
 		}
 		bind .wp.wfone.listview <Up> {
+			# remove the tag from the current item
 			.wp.wfone.listview tag remove focussed $tv_index
+			# check that there is a previous item
 			if {[.wp.wfone.listview prev $tv_index] != ""} {
+				# if there is then check that the previous item is not selected as well
+				# and check that this is not the anchor
+				# if all this is true deselect the item and select the previous one
+				if {[lsearch [.wp.wfone.listview selection] $tv_index] != -1 && [lsearch [.wp.wfone.listview selection] [.wp.wfone.listview prev $tv_index]] != -1 && $tv_index != $anchor} {
+					.wp.wfone.listview selection remove $tv_index
+					set listlast $tv_index
+				}
 				set tv_index [.wp.wfone.listview prev $tv_index]
-			}
+ 			} 
 			.wp.wfone.listview tag add focussed $tv_index 
 			.wp.wfone.listview see $tv_index
 			break
 		}
 		bind .wp.wfone.listview <Key-space> {
-			# toggle will set the selcted/unselected state
+			# toggle will set the selected/unselected state
 			.wp.wfone.listview selection toggle $tv_index
 		}
-###		bind .wp.wfone.listview <Shift-space> {
-###			event generate .wp.wfone.listview <Shift-ButtonPress-1>
-###		}
-	
+		bind .wp.wfone.listview <Shift-space> {
+			set listlast $tv_index
+			#set tv_index $listlast
+			if {$anchor == ""} {set anchor $listlast}
+			puts $debug_out(1) "Shift Space clicked on TreeView: Anchor is $anchor First was $listfirst Last is $listlast"
+			if {$aur_only == true} {
+				puts $debug_out(1) "\taur_only is true"
+				set listfirst $listlast
+				.wp.wfone.listview selection set $listfirst
+				break
+			}
+			.wp.wfone.listview selection set $anchor
+			set item $anchor
+			while {$listlast < $item} {
+				set item [.wp.wfone.listview prev $item]
+				.wp.wfone.listview selection add $item
+			}
+			set item $anchor
+			set count [expr abs (0x[string trim $listlast {I}] - 0x[string trim $item {I}] + 1)]
+			# check if we are being over ambitious
+			if {$count > 500} {
+				puts $debug_out(1) "Shift Button in Treeview - there are $count selected"
+				set ans [tk_messageBox -default cancel -detail "" -icon warning -message "\nReally select $count packages?" -parent . -title "Warning" -type okcancel]
+				switch $ans {
+					ok {set select true}
+					cancel {
+						set select false
+						# now break out of the bind script and do nothing
+						break
+					}
+				}
+			}
+			while {$listlast > $item} {
+				set item [.wp.wfone.listview next $item]
+				.wp.wfone.listview selection add $item
+			}
+			set listfirst $listlast
+			break
+		}
 		bind .wp.wfone.listview <Shift-ButtonPress-1> {
 			# remove any highlight border
 			.wp.wfone configure -highlightcolor #d9d9d9
@@ -9845,7 +10097,32 @@ frame .wp.wfone \
 			break
 		}
 		bind .wp.wfone.listview <Control-space> {
-			event generat .wp.wfone.listview <Control-ButtonPress-1>
+			# find which item was clicked on last
+			set listlast $tv_index
+			# if this item was selected already, then de-select it
+			if {[lsearch [.wp.wfone.listview selection] $listlast] != -1} {
+				puts $debug_out(1) "Control Space clicked on TreeView - remove Last $listlast, Anchor is $anchor"
+				.wp.wfone.listview selection remove $listlast
+				break
+			}
+			# if this is an aur list then only select one item
+			if {$aur_only == true} {
+				puts $debug_out(1) "Control Space clicked on TreeView but aur_only is true"
+				set listfirst $listlast
+				.wp.wfone.listview selection set $listfirst
+				break
+			}
+			# if this is the first item selected then set it as the anchor point
+			if {$listfirst == ""} {
+				puts $debug_out(1) "Control Space clicked on TreeView: Anchor is $anchor Last is $listlast"
+				set anchor $listlast
+			} else {
+				puts $debug_out(1) "Control Space clicked on TreeView: Anchor is $anchor Last is $listlast First is $listfirst"
+			}
+			# finish off - add the new item to the selection list and save it as first
+			.wp.wfone.listview selection add $listlast
+			set listfirst $listlast
+			break
 		}
 		bind .wp.wfone.listview <ButtonPress-1> {
 			# remove any highlight border
@@ -10311,9 +10588,9 @@ frame .wp.wfone \
 				puts $fid "#!/bin/sh"
 				puts $fid "password=\$1"
 				if {$su_cmd == "su -c"} {
-					puts $fid "echo \$password | $su_cmd \"pacman -D --asexplicit $package\" 2>&1 >/dev/null"
+					puts $fid "echo \$password | $su_cmd \"pacman -D --asexplicit $package\" > /dev/null 2>&1"
 				} else {
-					puts $fid "echo \$password | $su_cmd -S -p \"\" pacman -D --asexplicit $package 2>&1 >/dev/null"
+					puts $fid "echo \$password | $su_cmd -S -p \"\" pacman -D --asexplicit $package > /dev/null 2>&1"
 				}
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 				close $fid
@@ -10355,6 +10632,8 @@ frame .wp.wfone \
 				}
 			}
 			file delete $tmp_dir/vpacman.sh
+			# set the dataview variable blank so that the datview procedure updates the current page
+			set dataview ""
 			# and update dataview
 			get_dataview [.wp.wfone.listview selection]
 			after 5000 {set_message terminal ""}
@@ -10367,9 +10646,9 @@ frame .wp.wfone \
 				puts $fid "#!/bin/sh"
 				puts $fid "password=\$1"
 				if {$su_cmd == "su -c"} {
-					puts $fid "echo \$password | $su_cmd \"pacman -D --asdeps $package\" 2>&1 >/dev/null"
+					puts $fid "echo \$password | $su_cmd \"pacman -D --asdeps $package\" > /dev/null 2>&1"
 				} else {
-					puts $fid "echo \$password | $su_cmd -S -p \"\" pacman -D --asdeps $package 2>&1 >/dev/null"
+					puts $fid "echo \$password | $su_cmd -S -p \"\" pacman -D --asdeps $package > /dev/null 2>&1"
 				}
 				puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 				close $fid
@@ -10411,6 +10690,8 @@ frame .wp.wfone \
 				}
 			}
 			file delete $tmp_dir/vpacman.sh
+			# set the dataview variable blank so that the datview procedure updates the current page
+			set dataview ""
 			# and update dataview
 			get_dataview [.wp.wfone.listview selection]
 			after 5000 {set_message terminal ""}
@@ -10859,7 +11140,11 @@ balloon_set .filter_not_installed "Only show packages which are not installed fo
 balloon_set .filter_updates "Only show packages which have not been updated for the selected Group"
 balloon_set .filter_list_orphans "List any unused packages (Orphans)"
 balloon_set .filter_list_not_required "List only packages which are not required by any installed package"
-balloon_set .filter_list_aur_updates "List only local packages which may need to be updated"
+if {!$aur_all} {
+	balloon_set .filter_list_aur_updates "List only local packages which may need to be updated"
+} else {
+	balloon_set .filter_list_aur_updates "List all AUR/Local packages which have been installed"
+}
 balloon_set .filter_list_aur_updates_all "Include all local packages in the AUR/Local Updates list"
 balloon_set .scroll_selectgroup "Use right click to jump"
 balloon_set .wp.wfone.ylistview_scroll "Use right click to jump"
@@ -10943,21 +11228,21 @@ puts $debug_out(1) "THREADS - start threads set up -([expr [clock milliseconds] 
 						set name ""
 					} else {
 						set position [expr $index + 8]
-						set name [string trim [string range $line $position [expr [string first \, $line $position] - 1]] \"]
+						set name [string trim [string range $line $position [expr [string first \" $line $position] - 1]] \"]
 					}
 					set index [string first "\"Version\":" $line]
 					if {$index == -1} {
 						set version ""
 					} else {
 						set position [expr $index + 11]
-						set version [string trim [string range $line $position [expr [string first \, $line $position] - 1]] \"]
+						set version [string trim [string range $line $position [expr [string first \" $line $position] - 1]] \"]
 					}
 					set index [string first "\"Description\":" $line]
 					if {$index == -1 } {
 						set description ""
 					} else {
 						set position [expr $index + 15]
-						set description [string range $line $position [expr [string first \, $line $position] - 1]]
+						set description [string range $line $position [expr [string first \" $line $position] - 1]]
 						set description [string map {"\\" ""} $description]
 						set description [string trim $description \"]
 					}
