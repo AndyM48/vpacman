@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.1"
+set version "1.4.2"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -763,6 +763,8 @@ puts $debug_out(1) "Version $version: User is $env(USER) - Home is $home - Confi
 #	open a window and display some text in it
 # proc view_text_codes
 #   read through some text and replace a set of codes with a given tag
+# proc view_text_url
+#	check for a selection before opening a URL in the browser
 
 proc all_select {} {
 
@@ -1697,17 +1699,14 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 		}
 	}	
 
-### if something changed then set result to success
+	# if something changed then set result to success
 	if {[expr $count_upgrades + $count_downgrades + $count_installs] >= 1} {
 		puts $debug_out(2) "aur_upgrade - Some changes were recorded"
 		set result "success"
 	}
 
-#	if {$vstate == "indate" || $result == "failed"} 
-#		puts $debug_out(2) "\tPackage was indate ($vstate) or the result was failed ($result)"
 	if {$result == "failed"} {
 		puts $debug_out(2) "\tPackage was $vstate but the result was failed"
-###
 		# the local database will still be up to date
 		# if we only did a reinstall then there is nothing to do
 	} else {
@@ -2147,7 +2146,7 @@ global debug_out su_cmd win_mainx win_mainy
 	.clean.yes_no configure -text "no"
 	# now set up a binding to toggle the value of the clean_yes_no label
 	bind .clean.yes_no <ButtonRelease-1> {
-		if {[string tolower [.clean.yes_no cget -text] == "yes"} {
+		if {[string tolower [.clean.yes_no cget -text]] == "yes"} {
 			.clean.yes_no configure -text "no"
 		} else {
 			.clean.yes_no configure -text "yes"
@@ -3190,8 +3189,10 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 		puts $debug_out(2) "execute - called the start procedure"
 		# call start
 		start
+		# see if a local package is included in the selections or the list is set to AUR/Local updates
 		if {$aur || $selected_list == "aur_updates"} {
 			puts $debug_out(2) "execute - one or more packages are local, so do not call aur_versions_thread now, leave it to get_aur_versions when it is called by get_aur_updates"
+			puts $debug_out(2) "execute - selected list is $selected_list"
 			set aur_versions ""
 			get_aur_updates
 		} elseif {$threads} {
@@ -3202,20 +3203,22 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 				thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
 			}
 		} else {
-			puts $debug_out(1) "execute - cannot call aur_versions thread - threading not available"
+			puts $debug_out(2) "execute - cannot call aur_versions thread - threading not available"
 			set aur_versions ""
 			get_aur_updates
 		}
-		
 		puts $debug_out(2) "execute - completed the start procedure"
 		
 		# selected_list is the list selection. If it is 0 then just run filter
-		puts $debug_out(2) "execute - now run the filter for \"$selected_list\""
 		if {$selected_list == 0} {
+			# get_aur_updates left aur_local set to true
+			set aur_only false
+			puts $debug_out(2) "execute - now run the filter for \"all\""
 			# if we needed to run get_aur_updates the filter will have been set to aur 
 			set filter "all"
 			filter
 		} else {
+			puts $debug_out(2) "execute - now run the filter_checkbutton for \"$selected_list\""
 			# selected_list is not 0 so run the required filter(_checkbutton)
 			switch $selected_list {
 				"orphans" {
@@ -3225,6 +3228,7 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 					filter_checkbutton ".filter_list_not_required" "pacman -b $tmp_dir -Qtq" "Not Required"
 				}
 				"aur_updates" {
+					# are we running this twice? get_aur_updates will return if aur_versions is not blank
 					get_aur_updates
 				}
 			}
@@ -4461,8 +4465,13 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 	}
 	# aur_updates should now be a clean list of all the updates including all the local packages if requested
 	set filter_list $aur_updates
-	puts $debug_out(2) "get_aur_updates - configured text \"AUR/Local Updates ([llength $filter_list])\""
-	.filter_list_aur_updates configure -text "AUR/Local Updates ([llength $filter_list])"
+	if {$aur_all} {
+		puts $debug_out(2) "get_aur_updates - configured text \"AUR/Local Packages ([llength $filter_list])\""
+		.filter_list_aur_updates configure -text "AUR/Local Packages ([llength $filter_list])"
+	} else {
+		puts $debug_out(2) "get_aur_updates - configured text \"AUR/Local Updates ([llength $filter_list])\""
+		.filter_list_aur_updates configure -text "AUR/Local Updates ([llength $filter_list])"
+	}
 	puts $debug_out(2) "aur_updates message\n\t$messages\naur_messages $aur_messages"
 	if {$messages != "" && $aur_messages == "true"} {
 		set ans [tk_messageBox -default yes -detail "Do you want to view the warning messages now?" -icon question -message "There are warning messages from the AUR/Local Updates." -parent . -title "Upgrade Warnings" -type yesno]
@@ -4524,6 +4533,12 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 			return 1
 		}
 		file delete "$tmp_dir/get_aur_versions.sh"
+		# check if the file has been written
+		set count 0
+		while {[file readable $tmp_dir/vpacman_aur_result] == 0 && $count < 5} {
+			after 100
+			incr count
+		}
 		puts $debug_out(2) "get_aur_versions - found result ([expr [clock milliseconds] - $start_time])"
 		# read the results into a variable 
 		set fid [open $tmp_dir/vpacman_aur_result r]
@@ -4786,8 +4801,8 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 						# if this is row 1 then change the wording to Repository : ....
 						if {$count == 1} {
 							.wp.wftwo.dataview.moreinfo insert end "Repository[string repeat { } [expr $index - 10]]: $repo\n" 
-						#  if we know of a browser, and this is a local package then use the package name to make a URL and insert tags accordingly
-				} elseif {$repo == "local" && $browser != "" && $count == 2} {
+							#  if we know of a browser, and this is a local package then use the package name to make a URL and insert tags accordingly
+						} elseif {$repo == "local" && $browser != "" && $count == 2} {
 							# click on the link to view it in the selected browser
 							.wp.wftwo.dataview.moreinfo tag bind get_aur <ButtonRelease-1> "puts $debug_out(2) \"GET AUR URL\"; exec $browser https://aur.archlinux.org/packages/[string range $row [expr $index + 2] end] &"
 							# add the normal text to the text box
@@ -6492,8 +6507,8 @@ global aur_all aur_versions debug_out filter filter_list find group list_all lis
 	}
 	# now show the number of packages against AUR/Local Updates
 	if {$aur_all == true} {
-		puts $debug_out(2) "put_aur_versions - configured text \"AUR/Local Updates ([llength $list_local])\""
-		.filter_list_aur_updates configure -text "AUR/Local Updates ([llength $list_local])"
+		puts $debug_out(2) "put_aur_versions - configured text \"AUR/Local Packages ([llength $list_local])\""
+		.filter_list_aur_updates configure -text "AUR/Local Packages ([llength $list_local])"
 	} else {
 		puts $debug_out(2) "put_aur_versions - configured text to local_newer \"AUR/Local Updates ($local_newer)\""
 		.filter_list_aur_updates configure -text "AUR/Local Updates ($local_newer)"
@@ -6905,17 +6920,23 @@ global debug_out start_time sync_time
 	puts $debug_out(1) "set_clock called - ([expr [clock milliseconds] - $start_time])"
 	# test for a resync and update if requested
 	if {$test} {test_resync}
-
+	
+	set delay 60000
 	set e_time [expr [clock seconds] - $sync_time]
 	# now convert the number of elapsed seconds into a string dd:hh:mm
 	set days [expr int($e_time / 60 / 60 / 24)]
-	if {[string length $days] == 1} {set days "0$days"}
 	set hours [expr int($e_time / 60 / 60) - ($days * 24)] 
-	set mins [expr round((($e_time / 60.0) +0.5) - ($hours * 60) - ($days * 60 * 24))]
+	set mins [expr round(($e_time / 60.0) - ($hours * 60) - ($days * 60 * 24))]
+	# set the next update to the next full minute 
+	set delay [expr (91 - ($e_time - [expr int($e_time / 60) * 60])) * 1000]
+	# show at least 1 minute
+	if {[expr $days + $hours + $mins] == 0} {set mins 1}
+	if {[string length $days] == 1} {set days "0$days"}
+	puts $debug_out(3) "set_clock - update set to ${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end]"
 	.filter_clock configure -text "${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end]"
-	
+	update
 	# wait a minute
-	after 60000 {
+	after $delay {
 		# update the time since last sync
 		set_clock true
 	}
@@ -7309,22 +7330,24 @@ proc test_resync {} {
 global aur_versions_TID debug_out dlprog list_local threads sync_time tmp_dir
 # test if a resync is required after a failed update or an external intervention
 
-	puts $debug_out(1) "test_resync called"
+	puts $debug_out(1) "test_resync called - sync_time is $sync_time"
 	# save the last recorded time that the temporary sync database was updated
 	set prev_tmpsync_time $sync_time
 	# now get the latest time that the temporary sync database was updated
 	set latest_tmpsync_time [file mtime "$tmp_dir/sync"]
 	# now update the temporary sync database if necessary and record the update time
-	# get_sync_time checks that the temporary sync database exists and is the same or newer than the pacman database
+	# 	get_sync_time checks that the temporary sync database exists and is the same or newer than the pacman database
+	# get_sync_time returns the update time of the tmp database and the update time of the real database
 	set sync_time [lindex [get_sync_time] 0]
-	# so we can see if an update occurred to the sync database because it will have changed the temporary sync database time.
-	if {$latest_tmpsync_time != [file mtime "$tmp_dir/sync"]} {
+	# get_sync_time may have changed the value of latest_tmpsync_time
+	# see if an update occurred to the sync database because it will have changed the temporary sync database time.
+	if {$latest_tmpsync_time != $sync_time} {
 		puts $debug_out(2) "test_resync - external pacman sync detected"
 		# the pacman database has been updated, is the system stable?
 		test_system ""
 	}
 	# now we can see if an update occurred to the temporary sync database because the mtime will have changed from the previously recorded tmpsync time.
-	if {$latest_tmpsync_time != $prev_tmpsync_time} {
+	if {$sync_time != $prev_tmpsync_time} {
 		puts $debug_out(2) "test_resync - external temporary sync detected"
 		# was anything updated?
 		set last_update_time [get_file_mtime $tmp_dir/sync db]
@@ -7394,6 +7417,9 @@ proc test_versions {installed available} {
 	
 global debug_out start_time
 # test if the available version is newer or older than the installed version
+# test_versions is called when the versions in list_all or list_show are not the same.
+# pacman -b $tmp_dir -Qu should produce the same result, but would need to be run at start which could add to the startup time.
+# test_versions is also called for AUR/local packages and to check AUR/Local dependancies
 
 	puts $debug_out(1) "test_versions called for installed $installed and available $available  ([expr [clock milliseconds] - $start_time])"
 
@@ -7449,6 +7475,11 @@ global debug_out start_time
 	set count 0
 	while {$count < $length} {
 		puts $debug_out(3) "test_versions - compare $old_version to $new_version, $length items, $count item: [lindex $new_version $count] and [lindex $old_version $count]"
+		# if the first item is blank and the second item is not then the second version is an extended version
+		if {[lindex $new_version $count] != "" && [lindex $old_version $count] == ""} {
+			puts $debug_out(3) "test_versions - version number is extended, available is newer"
+			return "newer"
+		}
 		# if both versions are integer numbers test them
 		if {[string is integer [lindex $new_version $count]] && [string is integer [lindex $old_version $count]]} {
 			if {[lindex $new_version $count] > [lindex $old_version $count]} {
@@ -7479,50 +7510,70 @@ global debug_out start_time
 			set index2 0
 			
 			while true {
+				set failindex1 0
+				set failindex2 0
 				# does each string start with an alpha sub string
 				set result [string is alpha -failindex failindex1 $string1]
-				# is string1 alpha
+				puts $debug_out(3) "test_versions - complex compare is $string1 alpha? Results is $result, Fail index is $failindex1"
+				# what type is string1 
 				if {$result == 1} {
 					puts $debug_out(3) "test_versions - complex compare $string1 is alpha"
 				} elseif {$failindex1 != 0} {
 					puts $debug_out(3) "test_versions - complex compare $string1 is alphanumeric"
 				} else {
-					puts $debug_out(3) "test_versions - complex compare $string1 is numeric"
+					puts $debug_out(3) "test_versions - complex compare $string1 starts with a number"
+					set result [string is integer -failindex failindex1 $string1]
+					if {$result == 1} {
+						puts $debug_out(3) "test_versions - complex compare $string1 is numeric"
+						set failindex1 0
+					}
 				}
-				# is string2 alpha
+				# what type is string2
 				set result [string is alpha -failindex failindex2 $string2]
+				puts $debug_out(3) "test_versions - complex compare is $string2 alpha? Results is $result, Fail index is $failindex2"
+				# is string1 alpha
 				if {$result == 1} {
 					puts $debug_out(3) "test_versions - complex compare $string2 is alpha"
 				} elseif {$failindex2 != 0} {
 					puts $debug_out(3) "test_versions - complex compare $string2 is alphanumeric"
 				} else {
-					puts $debug_out(3) "test_versions - complex compare $string2 is numeric"
+					puts $debug_out(3) "test_versions - complex compare $string2 starts with a number"
+					set result [string is integer -failindex failindex2 $string2]
+					if {$result == 1} {
+						puts $debug_out(3) "test_versions - complex compare $string2 is numeric"
+						set failindex2 0
+					}
 				}
-				set sub_string1 [string range $string1 $index1 $failindex1-1]
-				set sub_string2 [string range $string2 $index2 $failindex2-1]
-				if {$sub_string1 != "" && $sub_string2 != ""} {
-					puts $debug_out(3) "test_versions - complex compare $sub_string1 with $sub_string2"
+
+				if {$failindex1 == 0} {
+					set sub_string1 $string1
+				} else {
+					set sub_string1 [string range $string1 $index1 $failindex1-1]
 				}
-				if {$failindex1 == 0 && $failindex2 != 0} {
+				if {$failindex2 == 0} {
+					set sub_string2 $string2
+				} else {
+					set sub_string2 [string range $string2 $index2 $failindex2-1]
+				}
+				puts $debug_out(3) "test_versions - complex compare sub_strings \"$sub_string1\" with \"$sub_string2\""
+				if {[string is integer $sub_string1] == 1 && [string is alpha $sub_string2] == 1} {
 					puts $debug_out(1) "test_versions - complex compare $sub_string1 is newer (is integer)"
 					return "newer"
-				} elseif {$failindex1 != 0 && $failindex2 == 0} {
+				} elseif {[string is alpha $sub_string1] == 1 && [string is integer $sub_string2] == 1} {
 					puts $debug_out(1) "test_versions - complex compare $sub_string1 is older (is alpha not integer)"
 					return "older"
-				} elseif {$failindex1 == 0 && $failindex2 == 0} {
-					puts $debug_out(3) "test_versions - complex sub_strings are both integers"
-					if {$string1 > $string2} {
+				} elseif {[string is integer $sub_string1] == 1 && [string is integer $sub_string2] == 1} {
+					puts $debug_out(3) "test_versions - complex compare sub_strings are both integers"
+					if {$sub_string1 > $sub_string2} {
 						puts $debug_out(1) "test_versions - complex compare values indicates that available is newer"
 						return "newer"
-					} elseif {$string1 < $string2} {
+					} elseif {$sub_string1 < $sub_string2} {
 						puts $debug_out(1) "test_versions - complex compare values indicates that available is older"
 						return "older"
 					}
 				} else {
-					set sub_string1 [string range $string1 $index1 $failindex1-1]
-					set sub_string2 [string range $string2 $index2 $failindex2-1]
 					set result [string compare $sub_string1 $sub_string2]
-					puts $debug_out(3) "test_versions - complex compare $sub_string1 with $sub_string2 returned $result"
+					puts $debug_out(3) "test_versions - complex compare strings $sub_string1 with $sub_string2 returned $result"
 					if {$result == 1} {
 						puts $debug_out(1) "test_versions - complex compare strings indicates that available is newer"
 						return "newer"
@@ -7536,6 +7587,7 @@ global debug_out start_time
 				set string2 [string range $string2 $failindex2 end]
 				set index1 $failindex1 
 				set index2 $failindex2
+				puts $debug_out(3) "test_versions - complex compare now test \"$string1\" with \"$string2\""
 			}
 		}
 		incr count
@@ -8795,7 +8847,7 @@ proc view_text {text title} {
 global browser debug_out save_geometry geometry_view
 # open a window and display some text in it
 	
-	puts $debug_out(1) "view-text called"
+	puts $debug_out(1) "view_text called"
 
 	catch {destroy .view}
 	
@@ -8811,7 +8863,6 @@ global browser debug_out save_geometry geometry_view
 	
 		text .view.listbox \
 			-background white \
-			-selectforeground red \
 			-tabs "[expr {4 * [font measure TkTextFont 0]}] left" \
 			-tabstyle wordprocessor \
 			-wrap word \
@@ -8836,7 +8887,7 @@ global browser debug_out save_geometry geometry_view
 		
 		button .view.close_button \
 			-command {
-				puts $debug_out(1) "View-text closed"
+				puts $debug_out(1) "view_text closed"
 				if {[string tolower $save_geometry] == "yes"} {set geometry_view [wm geometry .view]; put_configs}
 				grab release .view
 				destroy .view
@@ -8866,7 +8917,7 @@ global browser debug_out save_geometry geometry_view
 	
 	# and set up a binding for it
 		bind .view.listbox <ButtonRelease-3> {
-			puts $debug_out(2) "view-text button 3 pressed"
+			puts $debug_out(2) "view_text button 3 pressed"
 			if {[.view.listbox tag ranges sel] != ""} {
 				tk_popup .dataview_popup %X %Y 0
 			}
@@ -8874,20 +8925,20 @@ global browser debug_out save_geometry geometry_view
 	
 		
 	# Set up some tags for the text field '.view.listbox'
-	# make the URL blue
-		.view.listbox tag configure url_tag -foreground blue 
+	# make the URL blue, do not show any selection
+		.view.listbox tag configure url_tag -foreground blue -selectforeground blue
 	# set the cursor to a left pointer when hovering over the text
 		.view.listbox tag bind url_cursor_in <Enter> ".view.listbox configure -cursor left_ptr"
 	# set the cursor to the default when leaving the text
 		.view.listbox tag bind url_cursor_out <Leave> ".view.listbox configure -cursor [.view.listbox cget -cursor]"
 	# set the text background colour
-		.view.listbox tag configure background_tag -background "#F6FAA0" -font "TkFixedFont"
+		.view.listbox tag configure background_tag -background "#F6FAA0" -font "TkFixedFont" -selectbackground #c3c3c3
 	# set the text to bold
-		.view.listbox tag configure bold_tag -font "TkHeadingFont" 
+		.view.listbox tag configure bold_tag -font "TkHeadingFont" -selectbackground #c3c3c3
 	# set the text to centred
-		.view.listbox tag configure centred_tag -justify center 	
+		.view.listbox tag configure centred_tag -justify center -selectbackground #c3c3c3	
 	# set the text to fixed width
-		.view.listbox tag configure fixed_tag -font "TkFixedFont"
+		.view.listbox tag configure fixed_tag -font "TkFixedFont" -selectbackground #c3c3c3
 	# set the one indent value
 		.view.listbox tag configure indent1_tag -lmargin2 "[expr {4 * [font measure TkTextFont 0]}]" 
 	# set the two indent value
@@ -8931,7 +8982,9 @@ global browser debug_out save_geometry geometry_view
 			# and the end index of that string, but also the position from which to start the next seach
 			set start_index $index+[string length $text_url]chars
 			# set up a bind tag for the text found
-			.view.listbox tag bind get_url($count) <ButtonRelease-1> "exec $browser $text_url &"
+			#.view.listbox tag bind get_url($count) <ButtonRelease-1> "exec $browser $text_url &"
+			.view.listbox tag bind get_url($count) <ButtonRelease-1> "view_text_url $text_url"
+			
 			puts $debug_out(2) "view_text - found http at $index : $text_url : get_url($count) set to exec $browser $text_url &"
 			# now replace the text with the text plus all of its tags
 			puts $debug_out(2) "view_text - replace text $text_url at $index to $start_index with the text plus tags"
@@ -8970,7 +9023,7 @@ global debug_out
 	set end_index 0.0
 	set to 0
 	
-	# read through the test and replace any start/end codes with the tag
+	# read through the text and replace any start/end codes with the tag
 	while {true} {
 		# set from to the start of the code string
 		puts $debug_out(3) "view_text_codes - search for ${start_code} in text with result [string first $start_code $text $start]"
@@ -9000,6 +9053,22 @@ global debug_out
 		set start_index $end_index
 	}
 	puts $debug_out(1) "view_text_codes completed"
+}
+
+proc view_text_url {url} {
+	
+global browser debug_out
+# check for a selection before opening a URL in the browser
+
+	puts $debug_out(1) "view_text_url - called for $url"
+	
+	if {[.view.listbox tag ranges sel] != ""} {
+		puts $debug_out(1) "view_text_url - there is a selection, do nothing"
+		return 1
+	} else {
+		puts $debug_out(1) "view_text_url - there is no selection, open $url"
+		exec $browser $url &
+	}
 }
 
 # MAIN 
@@ -9701,16 +9770,20 @@ frame .filters
 			}			
 		} \
 		-onvalue "aur_updates" \
-		-text "AUR/Local Updates" \
 		-variable selected_list
+	if {$aur_all == true} {
+		.filter_list_aur_updates configure -text "AUR/Local Packages"
+	} else {
+		.filter_list_aur_updates configure -text "AUR/Local Updates"
+	}		
 		
 	checkbutton .filter_list_aur_updates_all \
 		-command {
 			update idletasks
 			puts $debug_out(1) "aur_all set to $aur_all"
 			if {$aur_all} {
-				puts $debug_out(2) ".filter_list_aur_updates - configured text \"AUR/Local Updates ([llength $list_local])\""
-				.filter_list_aur_updates configure -text "AUR/Local Updates ([llength $list_local])"
+				puts $debug_out(2) ".filter_list_aur_updates - configured text \"AUR/Local Packages ([llength $list_local])\""
+				.filter_list_aur_updates configure -text "AUR/Local Packages ([llength $list_local])"
 				balloon_set .filter_list_aur_updates "List all AUR/Local packages which have been installed"
 			} else {
 				puts $debug_out(2) ".filter_list_aur_updates - configured text to local_newer \"AUR/Local Updates ($local_newer)\""
@@ -11145,7 +11218,7 @@ if {!$aur_all} {
 } else {
 	balloon_set .filter_list_aur_updates "List all AUR/Local packages which have been installed"
 }
-balloon_set .filter_list_aur_updates_all "Include all local packages in the AUR/Local Updates list"
+balloon_set .filter_list_aur_updates_all "Include all local packages in the AUR/Local list"
 balloon_set .scroll_selectgroup "Use right click to jump"
 balloon_set .wp.wfone.ylistview_scroll "Use right click to jump"
 balloon_set .wp.wftwo.ydataview_files_scroll "Use right click to jump"
