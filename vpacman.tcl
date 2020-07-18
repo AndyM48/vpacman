@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.2"
+set version "1.4.3"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -175,7 +175,7 @@ global config_file
 # ..configurable
 global backup_dir browser buttons editor geometry geometry_view helpbg helpfg icon_dir installed_colour keep_log outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
 # ..variables
-global about_text after_id anchor args aur_all aur_files aur_installs aur_list aur_messages aur_only aur_updates aur_versions backup_log bubble colours count_all count_installed count_outdated count_uninstalled dataview dbpath depends_searches diffprog dlprog filter filter_list find findfile find_message findtype fs_upgrade geometry_config group group_index help_text index installed_colour is_connected known_browsers known_diffprogs known_editors known_terminals list_all list_groups list_installed list_local list_local_ids list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order local_newer message mirror_countries one_time outdated_colour package_actions pacman_files_upgrade part_upgrade pkgfile_upgrade repo_delete_msg select selected_list selected_message start_time state su_cmd sync_time system_test threads times tv_index tv_select tverr_message tverr_text upgrade_time upgrades upgrades_count version win_configx win_configy win_mainx win_mainy
+global about_text after_id anchor args aur_all aur_files aur_installs aur_list aur_messages aur_only aur_updates aur_versions backup_log bubble clock_id colours count_all count_installed count_outdated count_uninstalled dataview dbpath depends_searches diffprog dlprog filter filter_list find findfile find_message findtype fs_upgrade geometry_config group group_index help_text index installed_colour is_connected known_browsers known_diffprogs known_editors known_terminals list_all list_groups list_installed list_local list_local_ids list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order local_newer message mirror_countries one_time outdated_colour package_actions pacman_files_upgrade part_upgrade pkgfile_upgrade repo_delete_msg select selected_list selected_message start_time state su_cmd sync_time system_test threads times tv_index tv_select tverr_message tverr_text upgrade_time upgrades upgrades_count version win_configx win_configy win_mainx win_mainy
 
 # VARIABLES
 
@@ -256,6 +256,8 @@ set backup_log "yes"
 set browser ""
 # toolbar button size
 set buttons "medium"
+# set an id for the clock update after delay
+set clock_id 0
 # list of all the known colours
 set colours "{alice blue} {AliceBlue} {antique white} {AntiqueWhite} {AntiqueWhite1} {AntiqueWhite2} {AntiqueWhite3} {AntiqueWhite4} {aquamarine} {aquamarine1} {aquamarine2} {aquamarine3} {aquamarine4} {azure} {azure1} {azure2} {azure3} {azure4} {beige} {bisque} {bisque1} {bisque2} {bisque3} {bisque4} {black} {blanched almond} {BlanchedAlmond} {blue} {blue violet} {blue1} {blue2} {blue3} {blue4} {BlueViolet} {brown} {brown1} {brown2} {brown3} {brown4} {burlywood} {burlywood1} {burlywood2} {burlywood3} {burlywood4} {cadet blue} {CadetBlue} {CadetBlue1} {CadetBlue2} {CadetBlue3} {CadetBlue4} {chartreuse} {chartreuse1} {chartreuse2} {chartreuse3} {chartreuse4} {chocolate} {chocolate1} {chocolate2} {chocolate3} {chocolate4} {coral} {coral1} {coral2} {coral3} {coral4} {cornflower blue} {CornflowerBlue} {cornsilk} {cornsilk1} {cornsilk2} {cornsilk3} {cornsilk4} {cyan} {cyan1} {cyan2} {cyan3} {cyan4} {dark blue} {dark cyan} {dark goldenrod} {dark gray} {dark green} {dark grey} {dark khaki} {dark magenta} {dark olive green} {dark orange} {dark orchid} {dark red} {dark salmon} {dark sea green} {dark slate blue} {dark slate gray} {dark slate grey} {dark turquoise} {dark violet} {DarkBlue} {DarkCyan} {DarkGoldenrod} {DarkGoldenrod1} {DarkGoldenrod2} {DarkGoldenrod3} {DarkGoldenrod4} {DarkGray} {DarkGreen} {DarkGrey} {DarkKhaki} {DarkMagenta} {DarkOliveGreen} {DarkOliveGreen1} {DarkOliveGreen2} {DarkOliveGreen3} {DarkOliveGreen4} {DarkOrange} {DarkOrange1} {DarkOrange2} {DarkOrange3} {DarkOrange4} {DarkOrchid} {DarkOrchid1} {DarkOrchid2} {DarkOrchid3} {DarkOrchid4} {DarkRed} {DarkSalmon} {DarkSeaGreen} {DarkSeaGreen1} {DarkSeaGreen2} {DarkSeaGreen3} {DarkSeaGreen4} {DarkSlateBlue} {DarkSlateGray} {DarkSlateGray1} {DarkSlateGray2} {DarkSlateGray3} {DarkSlateGray4} {DarkSlateGrey} {DarkTurquoise} {DarkViolet} {deep pink} {deep sky blue} {DeepPink} {DeepPink1} {DeepPink2} {DeepPink3} {DeepPink4} {DeepSkyBlue} {DeepSkyBlue1} {DeepSkyBlue2} {DeepSkyBlue3} {DeepSkyBlue4} {dim gray} {dim grey} {DimGray} {DimGrey} {dodger blue} {DodgerBlue} {DodgerBlue1} {DodgerBlue2} {DodgerBlue3} {DodgerBlue4} {firebrick} {firebrick1} {firebrick2} {firebrick3} {firebrick4} {floral white} {FloralWhite} {forest green} {ForestGreen} {gainsboro} {ghost white} {GhostWhite} {gold} {gold1} {gold2} {gold3} {gold4} {goldenrod} {goldenrod1} {goldenrod2} {goldenrod3} {goldenrod4} {gray} {gray0} {gray1} {gray2} {gray3} {gray4} {gray5} {gray6} {gray7} {gray8} {gray9} {gray10} {gray11} {gray12} {gray13} {gray14} {gray15} {gray16} {gray17} {gray18} {gray19} {gray20} {gray21} {gray22} {gray23} {gray24} {gray25} {gray26} {gray27} {gray28} {gray29} {gray30} {gray31} {gray32} {gray33} {gray34} {gray35} {gray36} {gray37} {gray38} {gray39} {gray40} {gray41} {gray42} {gray43} {gray44} {gray45} {gray46} {gray47} {gray48} {gray49} {gray50} {gray51} {gray52} {gray53} {gray54} {gray55} {gray56} {gray57} {gray58} {gray59} {gray60} {gray61} {gray62} {gray63} {gray64} {gray65} {gray66} {gray67} {gray68} {gray69} {gray70} {gray71} {gray72} {gray73} {gray74} {gray75} {gray76} {gray77} {gray78} {gray79} {gray80} {gray81} {gray82} {gray83} {gray84} {gray85} {gray86} {gray87} {gray88} {gray89} {gray90} {gray91} {gray92} {gray93} {gray94} {gray95} {gray96} {gray97} {gray98} {gray99} {gray100} {green} {green yellow} {green1} {green2} {green3} {green4} {GreenYellow} {grey} {grey0} {grey1} {grey2} {grey3} {grey4} {grey5} {grey6} {grey7} {grey8} {grey9} {grey10} {grey11} {grey12} {grey13} {grey14} {grey15} {grey16} {grey17} {grey18} {grey19} {grey20} {grey21} {grey22} {grey23} {grey24} {grey25} {grey26} {grey27} {grey28} {grey29} {grey30} {grey31} {grey32} {grey33} {grey34} {grey35} {grey36} {grey37} {grey38} {grey39} {grey40} {grey41} {grey42} {grey43} {grey44} {grey45} {grey46} {grey47} {grey48} {grey49} {grey50} {grey51} {grey52} {grey53} {grey54} {grey55} {grey56} {grey57} {grey58} {grey59} {grey60} {grey61} {grey62} {grey63} {grey64} {grey65} {grey66} {grey67} {grey68} {grey69} {grey70} {grey71} {grey72} {grey73} {grey74} {grey75} {grey76} {grey77} {grey78} {grey79} {grey80} {grey81} {grey82} {grey83} {grey84} {grey85} {grey86} {grey87} {grey88} {grey89} {grey90} {grey91} {grey92} {grey93} {grey94} {grey95} {grey96} {grey97} {grey98} {grey99} {grey100} {honeydew} {honeydew1} {honeydew2} {honeydew3} {honeydew4} {hot pink} {HotPink} {HotPink1} {HotPink2} {HotPink3} {HotPink4} {indian red} {IndianRed} {IndianRed1} {IndianRed2} {IndianRed3} {IndianRed4} {ivory} {ivory1} {ivory2} {ivory3} {ivory4} {khaki} {khaki1} {khaki2} {khaki3} {khaki4} {lavender} {lavender blush} {LavenderBlush} {LavenderBlush1} {LavenderBlush2} {LavenderBlush3} {LavenderBlush4} {lawn green} {LawnGreen} {lemon chiffon} {LemonChiffon} {LemonChiffon1} {LemonChiffon2} {LemonChiffon3} {LemonChiffon4} {light blue} {light coral} {light cyan} {light goldenrod} {light goldenrod yellow} {light gray} {light green} {light grey} {light pink} {light salmon} {light sea green} {light sky blue} {light slate blue} {light slate gray} {light slate grey} {light steel blue} {light yellow} {LightBlue} {LightBlue1} {LightBlue2} {LightBlue3} {LightBlue4} {LightCoral} {LightCyan} {LightCyan1} {LightCyan2} {LightCyan3} {LightCyan4} {LightGoldenrod} {LightGoldenrod1} {LightGoldenrod2} {LightGoldenrod3} {LightGoldenrod4} {LightGoldenrodYellow} {LightGray} {LightGreen} {LightGrey} {LightPink} {LightPink1} {LightPink2} {LightPink3} {LightPink4} {LightSalmon} {LightSalmon1} {LightSalmon2} {LightSalmon3} {LightSalmon4} {LightSeaGreen} {LightSkyBlue} {LightSkyBlue1} {LightSkyBlue2} {LightSkyBlue3} {LightSkyBlue4} {LightSlateBlue} {LightSlateGray} {LightSlateGrey} {LightSteelBlue} {LightSteelBlue1} {LightSteelBlue2} {LightSteelBlue3} {LightSteelBlue4} {LightYellow} {LightYellow1} {LightYellow2} {LightYellow3} {LightYellow4} {lime green} {LimeGreen} {linen} {magenta} {magenta1} {magenta2} {magenta3} {magenta4} {maroon} {maroon1} {maroon2} {maroon3} {maroon4} {medium aquamarine} {medium blue} {medium orchid} {medium purple} {medium sea green} {medium slate blue} {medium spring green} {medium turquoise} {medium violet red} {MediumAquamarine} {MediumBlue} {MediumOrchid} {MediumOrchid1} {MediumOrchid2} {MediumOrchid3} {MediumOrchid4} {MediumPurple} {MediumPurple1} {MediumPurple2} {MediumPurple3} {MediumPurple4} {MediumSeaGreen} {MediumSlateBlue} {MediumSpringGreen} {MediumTurquoise} {MediumVioletRed} {midnight blue} {MidnightBlue} {mint cream} {MintCream} {misty rose} {MistyRose} {MistyRose1} {MistyRose2} {MistyRose3} {MistyRose4} {moccasin} {navajo white} {NavajoWhite} {NavajoWhite1} {NavajoWhite2} {NavajoWhite3} {NavajoWhite4} {navy} {navy blue} {NavyBlue} {old lace} {OldLace} {olive drab} {OliveDrab} {OliveDrab1} {OliveDrab2} {OliveDrab3} {OliveDrab4} {orange} {orange red} {orange1} {orange2} {orange3} {orange4} {OrangeRed} {OrangeRed1} {OrangeRed2} {OrangeRed3} {OrangeRed4} {orchid} {orchid1} {orchid2} {orchid3} {orchid4} {pale goldenrod} {pale green} {pale turquoise} {pale violet red} {PaleGoldenrod} {PaleGreen} {PaleGreen1} {PaleGreen2} {PaleGreen3} {PaleGreen4} {PaleTurquoise} {PaleTurquoise1} {PaleTurquoise2} {PaleTurquoise3} {PaleTurquoise4} {PaleVioletRed} {PaleVioletRed1} {PaleVioletRed2} {PaleVioletRed3} {PaleVioletRed4} {papaya whip} {PapayaWhip} {peach puff} {PeachPuff} {PeachPuff1} {PeachPuff2} {PeachPuff3} {PeachPuff4} {peru} {pink} {pink1} {pink2} {pink3} {pink4} {plum} {plum1} {plum2} {plum3} {plum4} {powder blue} {PowderBlue} {purple} {purple1} {purple2} {purple3} {purple4} {red} {red1} {red2} {red3} {red4} {rosy brown} {RosyBrown} {RosyBrown1} {RosyBrown2} {RosyBrown3} {RosyBrown4} {royal blue} {RoyalBlue} {RoyalBlue1} {RoyalBlue2} {RoyalBlue3} {RoyalBlue4} {saddle brown} {SaddleBrown} {salmon} {salmon1} {salmon2} {salmon3} {salmon4} {sandy brown} {SandyBrown} {sea green} {SeaGreen} {SeaGreen1} {SeaGreen2} {SeaGreen3} {SeaGreen4} {seashell} {seashell1} {seashell2} {seashell3} {seashell4} {sienna} {sienna1} {sienna2} {sienna3} {sienna4} {sky blue} {SkyBlue} {SkyBlue1} {SkyBlue2} {SkyBlue3} {SkyBlue4} {slate blue} {slate gray} {slate grey} {SlateBlue} {SlateBlue1} {SlateBlue2} {SlateBlue3} {SlateBlue4} {SlateGray} {SlateGray1} {SlateGray2} {SlateGray3} {SlateGray4} {SlateGrey} {snow} {snow1} {snow2} {snow3} {snow4} {spring green} {SpringGreen} {SpringGreen1} {SpringGreen2} {SpringGreen3} {SpringGreen4} {steel blue} {SteelBlue} {SteelBlue1} {SteelBlue2} {SteelBlue3} {SteelBlue4} {tan} {tan1} {tan2} {tan3} {tan4} {thistle} {thistle1} {thistle2} {thistle3} {thistle4} {tomato} {tomato1} {tomato2} {tomato3} {tomato4} {turquoise} {turquoise1} {turquoise2} {turquoise3} {turquoise4} {violet} {violet red} {VioletRed} {VioletRed1} {VioletRed2} {VioletRed3} {VioletRed4} {wheat} {wheat1} {wheat2} {wheat3} {wheat4} {white} {white smoke} {WhiteSmoke} {yellow} {yellow green} {yellow1} {yellow2} {yellow3} {yellow4} {YellowGreen}"
 # set the location and name of the configuration file
@@ -768,7 +770,7 @@ puts $debug_out(1) "Version $version: User is $env(USER) - Home is $home - Confi
 
 proc all_select {} {
 
-global debug_out list_show_ids select tv_select
+global debug_out list_show list_show_ids select tv_select
 # select all the items in listview
 
 	puts $debug_out(1) "all_select called"
@@ -783,11 +785,16 @@ global debug_out list_show_ids select tv_select
 			}
 		}
 	}
-	set tv_select ""
-	puts $debug_out(2) "all_select - set selection to $list_show_ids"
-	.wp.wfone.listview selection add $list_show_ids
-	# bind TreeviewSelect will update all the variables when the selection changes
-	vwait tv_select
+	if {[llength $list_show] == 1 && [llength [.wp.wfone.listview selection]] == 1} {
+		# one item is in the list and it is already selected
+		puts $debug_out(2) "all_select - one item is already selected"
+	} else {
+		set tv_select ""
+		puts $debug_out(2) "all_select - set selection to $list_show_ids"
+		.wp.wfone.listview selection add $list_show_ids
+		# bind TreeviewSelect will update all the variables when the selection changes
+		vwait tv_select
+	}
 	puts $debug_out(1) "all_select completed"
 	return 0
 }
@@ -2135,6 +2142,10 @@ global debug_out su_cmd win_mainx win_mainy
 		-validatecommand {expr {"%P" == "0" || ([string is integer %P] && [string length %P] < 4 && [string first "0" %P] != 0)}} \
 		-width 3
 	.clean.keep insert 0 "3"
+	# now set up a binding to remove any messages if .clean.keep value changes
+	bind .clean.keep <KeyPress> {
+		set_message terminal ""
+	}
 	label .clean.uninstalled_label \
 		-text "Only target uninstalled packages"
 	label .clean.yes_no \
@@ -2146,6 +2157,7 @@ global debug_out su_cmd win_mainx win_mainy
 	.clean.yes_no configure -text "no"
 	# now set up a binding to toggle the value of the clean_yes_no label
 	bind .clean.yes_no <ButtonRelease-1> {
+		set_message terminal ""
 		if {[string tolower [.clean.yes_no cget -text]] == "yes"} {
 			.clean.yes_no configure -text "no"
 		} else {
@@ -2186,6 +2198,7 @@ global debug_out su_cmd win_mainx win_mainy
 						}
 						puts $debug_out(2) "clean-cache - clean attempted with paccache $args"
 						if {$su_cmd == "su -c" || $su_cmd == "sudo"} {
+							puts $debug_out(2) "clean_cache - called with no administrator priviledges so get a password"
 							puts $debug_out(2) "clean_cache - write shell script"
 							set fid [open $tmp_dir/vpacman.sh w]
 							puts $fid "#!/bin/sh"
@@ -2256,15 +2269,44 @@ global debug_out su_cmd win_mainx win_mainy
 					}
 				}
 			} \
-			-text "Continue"
+			-text "Continue" \
+			-width 8
+		button .clean.test \
+			-command {
+				puts $debug_out(1) "test clean_cache"
+				set clean_uninstalled [.clean.yes_no cget -text]
+				set keep_versions [.clean.keep get]
+				if {$keep_versions == "" || [string is integer $keep_versions] == 0} {
+					# check that keep_versions is a numerical value
+					puts $debug_out(2) "clean_cache - test - keep_versions is set to \"$keep_versions\" which is not a numerical value"
+					tk_messageBox -default ok -detail "The versions to keep must be a numerical value.\nThe number of versions to keep has not been changed" -icon warning -message "Error in number of cached versions to keep" -parent . -title "Incorrect Option" -type ok 
+					puts $debug_out(2) "clean_cache - test - reset the keep_versions value to 3"
+					.clean.keep delete 0 end
+					.clean.keep insert 0 "3"
+				} else {
+					if {$clean_uninstalled == "no"} {
+						set args "-dk${keep_versions}"
+					} else {
+						set args "-duk${keep_versions}"
+					}
+					puts $debug_out(2) "clean-cache - test clean attempted with paccache $args"
+					set error [catch {eval [concat exec paccache $args]} result]
+					puts $debug_out(2) "clean-cache - test clean ran with error $error and result $result"
+					set_message terminal "Completed [string range $result 14 end]"
+				}
+			} \
+			-text "Dry Run" \
+			-width 8
+			
 		button .clean.cancel \
 			-command {
 				puts $debug_out(1) "clean_cache cancelled"
-				set keep_log 3
+				set_message terminal ""
 				grab release .clean
 				destroy .clean
 			} \
-			-text "Cancel"
+			-text "Cancel" \
+			-width 8
 
 	# Geometry management
 
@@ -2279,10 +2321,11 @@ global debug_out su_cmd win_mainx win_mainy
 	grid .clean.buttons -in .clean -row 5 -column 1 \
 		-columnspan 5 \
 		-sticky we
-	grid .clean.continue -in .clean.buttons -row 1 -column 1 \
-		-sticky w
-	grid .clean.cancel -in .clean.buttons -row 1 -column 2 \
-		-sticky e
+		grid .clean.continue -in .clean.buttons -row 1 -column 1 \
+			-sticky w
+		grid .clean.test -in .clean.buttons -row 1 -column 2 
+		grid .clean.cancel -in .clean.buttons -row 1 -column 3 \
+			-sticky e
 		
 	# Resize behavior management
 
@@ -2301,6 +2344,7 @@ global debug_out su_cmd win_mainx win_mainy
 	grid rowconfigure .clean.buttons 1 -weight 0 -minsize 0 -pad 0
 	grid columnconfigure .clean.buttons 1 -weight 1 -minsize 0 -pad 0
 	grid columnconfigure .clean.buttons 2 -weight 1 -minsize 0 -pad 0
+	grid columnconfigure .clean.buttons 3 -weight 1 -minsize 0 -pad 0
 	
 	balloon_set .clean.keep_label "The number of versions of each package to keep"
 	balloon_set .clean.keep "The number of versions of each package to keep"
@@ -2847,7 +2891,7 @@ global count_all count_installed count_outdated count_uninstalled debug_out list
 
 proc execute {type} {
 
-global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlprog filter groups listview_last_selected listview_selected listview_selected_in_order list_local list_show list_outdated package_actions part_upgrade selected_list su_cmd sync_time system_test terminal_string threads tmp_dir upgrades
+global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_out dlprog filter groups listview_last_selected listview_selected listview_selected_in_order list_local list_show list_outdated package_actions part_upgrade selected_list su_cmd sync_time system_test terminal_string threads tmp_dir upgrades
 # runs whatever we need to do in a terminal window
 
 # known types are delete, install, sync and upgrade_all
@@ -2937,6 +2981,13 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 		puts $debug_out(1) "execute - returned error for $type"
 		return 1
 	}
+
+	# stop the clock if necessary	
+	if {$type == "sync" || $type == "upgrade_all"} {
+		puts $debug_out(2) "execute - cancel clock updates"
+		after cancel $clock_id
+		puts $debug_out(2) "execute - current after commands \"[after info]\""
+	}
 	
 	puts $debug_out(2) "execute - call execute_command with $action $command true"
 	execute_command "$action" "$command" "true"	
@@ -2954,6 +3005,8 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 		if {$type == "sync"} {set lck_dir ${tmp_dir}/}
 		if {[file exists ${lck_dir}db.lck]} {
 			tk_messageBox -message "Unable to lock database" -detail "If you're sure a package manager is not already\nrunning, you can remove ${lck_dir}db.lck" -icon error -title "Sync - Update Failed" -type ok
+			# silently copy the lock file to the clipboard
+			clipboard append ${lck_dir}db.lck
 			return 1
 		# language - this error is restricted to English but we can ignire it at present.
 		# the error was reported in the terminal, the message only shows one solution
@@ -3139,20 +3192,18 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 		# temporary database sync - restart
 		if {$count_syncs >= 1} {
 			puts $debug_out(2) "\tSync succeeded"
-			# stop the clock
-			# every minute:
-			after 60000 {}
 			# set the sync time
 			set sync_time [lindex [get_sync_time] 0]
-			# and the clock, but do not run test_resync
-			set_clock false
-			set restart true
 		} else {
 			set error 1
 			puts $debug_out(2) "\tSync failed"
 		}
 	}
-	
+	# restart the clock if necessary,  but do not test for resync for the first run	
+	if {$type == "sync" || $type == "upgrade_all"} {
+		puts $debug_out(2) "execute - restart clock updates (no resync test)"
+		set_clock false
+	}
 	# set any reminders about actions needed for certain packages
 	if {$action_message != ""} {set lf "\n"}
 	foreach {package action} $package_actions {
@@ -3182,8 +3233,7 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 	}
 
 	update
-	# test  and update if a resync is required
-	test_resync
+	# if we have just run sync or update_all then we are already up to date, if not set_clock will call test_resync in 60 seconds
 	# now update all the lists if we need to
 	if {$restart} {
 		puts $debug_out(2) "execute - called the start procedure"
@@ -3251,7 +3301,7 @@ global aur_only aur_updates aur_versions aur_versions_TID dbpath debug_out dlpro
 
 proc execute_command {action command wait} {
 	
-global debug_out su_cmd terminal_string tmp_dir
+global clock_id debug_out su_cmd terminal_string tmp_dir
 # runs a specific command in a terminal window
 
 	puts $debug_out(1) "execute_command - called for \"$action\", \"$command\" with wait set to $wait"
@@ -4087,6 +4137,7 @@ global aur_list browser debug_out dlprog win_mainx win_mainy
 		}
 		# now reset the last selected item
 		set last_selected  [.aurinstall.aurname.list curselection]
+		.aurinstall.aurname.get_info invoke
 	}
 	frame .aurinstall.aurname.infobuttons
 		button .aurinstall.aurname.get_info \
@@ -6913,33 +6964,34 @@ global debug_out
 
 proc set_clock {test} {
 	
-global debug_out start_time sync_time
+global clock_id debug_out start_time sync_time
 # work out the elapsed time since the last sync
 # calculate the minutes rounded up
 
 	puts $debug_out(1) "set_clock called - ([expr [clock milliseconds] - $start_time])"
+
 	# test for a resync and update if requested
 	if {$test} {test_resync}
 	
-	set delay 60000
 	set e_time [expr [clock seconds] - $sync_time]
 	# now convert the number of elapsed seconds into a string dd:hh:mm
 	set days [expr int($e_time / 60 / 60 / 24)]
 	set hours [expr int($e_time / 60 / 60) - ($days * 24)] 
 	set mins [expr round(($e_time / 60.0) - ($hours * 60) - ($days * 60 * 24))]
 	# set the next update to the next full minute 
-	set delay [expr (91 - ($e_time - [expr int($e_time / 60) * 60])) * 1000]
+	set delay [expr (60 - ($e_time - [expr int($e_time / 60) * 60])) * 1000]
 	# show at least 1 minute
 	if {[expr $days + $hours + $mins] == 0} {set mins 1}
 	if {[string length $days] == 1} {set days "0$days"}
 	puts $debug_out(3) "set_clock - update set to ${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end]"
 	.filter_clock configure -text "${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end]"
 	update
-	# wait a minute
-	after $delay {
+
+	# wait, up to, a minute
+	set clock_id [after $delay {
 		# update the time since last sync
 		set_clock true
-	}
+	}]
 	
 	puts $debug_out(1) "set_clock completed - ([expr [clock milliseconds] - $start_time])"
 }
@@ -7304,13 +7356,21 @@ global debug_out is_connected start_time
 	set try(1) "www.yahoo.com"
 	set try(2) "www.bing.com"
 	while {$count < 3} {
-		set error [catch {eval [concat exec timeout 3 ping -c 1 $try($count)]} result]
-		puts $debug_out(2) "test_internet - $count returned $error $result"
+		# bypass the ping dns lookup in case it takes too long
+		# uses IPv4 which should work for everyone
+		set error [catch {exec getent ahostsv4 $try($count)} result]
+		puts $debug_out(2) "test_internet - ran gentent with error $error and result \"$result\""
+		# if we have a result
 		if {$error == 0} {
-			set is_connected true
-			remove_warning_icon .filter_icons_disconnected
-			puts $debug_out(1) "test_internet completed - ([expr [clock milliseconds] - $start_time])"
-			return 0
+			set ip  [string range  $result 0 [string first " " $result]]
+			set error [catch {eval [concat exec timeout 3 ping -c 1 $ip]} result]
+			puts $debug_out(2) "test_internet - $count returned $error $result"
+			if {$error == 0} {
+				set is_connected true
+				remove_warning_icon .filter_icons_disconnected
+				puts $debug_out(1) "test_internet completed - ([expr [clock milliseconds] - $start_time])"
+				return 0
+			}
 		}
 		incr count
 		after 100
@@ -7457,24 +7517,24 @@ global debug_out start_time
 	} elseif {$new_epoch < $old_epoch} {
 		return "older"
 	}
-	
-	set old_version [split $installed "."]
-	set new_version [split $available "."]
-
+	set old_version [split $installed "+."]
+	set new_version [split $available "+."]
 	if {[string first "rc" $old_version] != -1 && [string first "rc" $new_version] == -1} {
 		# the installed version was a release candidate and new version is not
 		puts $debug_out(2) "test_versions - was a release candidate - this is an update"
 		return "newer"
 	}
+	
+	# what is the length of the longer list
 	set length [llength $old_version]
 	if {[llength $old_version] < [llength $new_version]} {
 		set length [llength $new_version]
 	}	
 	
-	puts $debug_out(2) "test_versions - compare new version $new_version to old version $old_version"
+	puts $debug_out(2) "test_versions - compare new version \"$new_version\" to old version \"$old_version\""
 	set count 0
 	while {$count < $length} {
-		puts $debug_out(3) "test_versions - compare $old_version to $new_version, $length items, $count item: [lindex $new_version $count] and [lindex $old_version $count]"
+		puts $debug_out(3) "test_versions - comparing \"$old_version\" to \"$new_version\", $length items, $count item: [lindex $new_version $count] and [lindex $old_version $count]"
 		# if the first item is blank and the second item is not then the second version is an extended version
 		if {[lindex $new_version $count] != "" && [lindex $old_version $count] == ""} {
 			puts $debug_out(3) "test_versions - version number is extended, available is newer"
@@ -7503,9 +7563,16 @@ global debug_out start_time
 			}
 		# otherwise compare two alphanumeric strings of unequal length
 		} else {
-			puts $debug_out(3) "test_versions - complex compare [lindex $new_version $count] with [lindex $old_version $count]"
 			set string1 [lindex $new_version $count]
 			set string2 [lindex $old_version $count]
+			puts $debug_out(3) "test_versions - complex compare $string1 with $string2"
+			if {$string1 == ""} {
+				puts $debug_out(3) "test_versions - complex compare string1 is blank, installed version is newer"
+				return "older"
+			} elseif {$string2 == ""} {
+				puts $debug_out(3) "test_versions - complex compare string2 is blank, available version is newer"
+				return "newer"
+			}
 			set index1 0
 			set index2 0
 			
@@ -7514,53 +7581,57 @@ global debug_out start_time
 				set failindex2 0
 				# does each string start with an alpha sub string
 				set result [string is alpha -failindex failindex1 $string1]
-				puts $debug_out(3) "test_versions - complex compare is $string1 alpha? Results is $result, Fail index is $failindex1"
+				puts $debug_out(3) "test_versions - complex compare is \"$string1\" alpha? Results is $result, Fail index is $failindex1"
 				# what type is string1 
 				if {$result == 1} {
-					puts $debug_out(3) "test_versions - complex compare $string1 is alpha"
+					puts $debug_out(3) "test_versions - complex compare \"$string1\" is alpha"
 				} elseif {$failindex1 != 0} {
-					puts $debug_out(3) "test_versions - complex compare $string1 is alphanumeric"
+					puts $debug_out(3) "test_versions - complex compare \"$string1\" is alphanumeric"
 				} else {
-					puts $debug_out(3) "test_versions - complex compare $string1 starts with a number"
-					set result [string is integer -failindex failindex1 $string1]
+					puts $debug_out(3) "test_versions - complex compare \"$string1\" starts with a number"
+					set result [string is integer -failindex failindex1 \"$string1\"]
 					if {$result == 1} {
-						puts $debug_out(3) "test_versions - complex compare $string1 is numeric"
+						puts $debug_out(3) "test_versions - complex compare \"$string1\" is numeric"
 						set failindex1 0
 					}
 				}
 				# what type is string2
-				set result [string is alpha -failindex failindex2 $string2]
-				puts $debug_out(3) "test_versions - complex compare is $string2 alpha? Results is $result, Fail index is $failindex2"
+				set result [string is alpha -failindex failindex2 \"$string2\"]
+				puts $debug_out(3) "test_versions - complex compare is \"$string2\" alpha? Results is $result, Fail index is $failindex2"
 				# is string1 alpha
 				if {$result == 1} {
-					puts $debug_out(3) "test_versions - complex compare $string2 is alpha"
+					puts $debug_out(3) "test_versions - complex compare \"$string2\" is alpha"
 				} elseif {$failindex2 != 0} {
-					puts $debug_out(3) "test_versions - complex compare $string2 is alphanumeric"
+					puts $debug_out(3) "test_versions - complex compare \"$string2\" is alphanumeric"
 				} else {
-					puts $debug_out(3) "test_versions - complex compare $string2 starts with a number"
-					set result [string is integer -failindex failindex2 $string2]
+					puts $debug_out(3) "test_versions - complex compare \"$string2\" starts with a number"
+					set result [string is integer -failindex failindex2 \"$string2\"]
 					if {$result == 1} {
-						puts $debug_out(3) "test_versions - complex compare $string2 is numeric"
+						puts $debug_out(3) "test_versions - complex compare \"$string2\" is numeric"
 						set failindex2 0
 					}
 				}
 
 				if {$failindex1 == 0} {
+					puts $debug_out(3) "test_versions - complex compare set sub_string1 to \"$string1\""
 					set sub_string1 $string1
 				} else {
+					puts $debug_out(3) "test_versions - complex compare set sub_string1 to \"[string range $string1 $index1 $failindex1-1]\""
 					set sub_string1 [string range $string1 $index1 $failindex1-1]
 				}
 				if {$failindex2 == 0} {
+					puts $debug_out(3) "test_versions - complex compare set sub_string2 to \"$string2\""
 					set sub_string2 $string2
 				} else {
+					puts $debug_out(3) "test_versions - complex compare set sub_string2 to \"[string range $string2 $index2 $failindex2-1]\""
 					set sub_string2 [string range $string2 $index2 $failindex2-1]
 				}
 				puts $debug_out(3) "test_versions - complex compare sub_strings \"$sub_string1\" with \"$sub_string2\""
 				if {[string is integer $sub_string1] == 1 && [string is alpha $sub_string2] == 1} {
-					puts $debug_out(1) "test_versions - complex compare $sub_string1 is newer (is integer)"
+					puts $debug_out(1) "test_versions - complex compare \"$sub_string1\" is newer (is integer)"
 					return "newer"
 				} elseif {[string is alpha $sub_string1] == 1 && [string is integer $sub_string2] == 1} {
-					puts $debug_out(1) "test_versions - complex compare $sub_string1 is older (is alpha not integer)"
+					puts $debug_out(1) "test_versions - complex compare \"$sub_string1\" is older (is alpha not integer)"
 					return "older"
 				} elseif {[string is integer $sub_string1] == 1 && [string is integer $sub_string2] == 1} {
 					puts $debug_out(3) "test_versions - complex compare sub_strings are both integers"
@@ -7573,7 +7644,7 @@ global debug_out start_time
 					}
 				} else {
 					set result [string compare $sub_string1 $sub_string2]
-					puts $debug_out(3) "test_versions - complex compare strings $sub_string1 with $sub_string2 returned $result"
+					puts $debug_out(3) "test_versions - complex compare strings \"$sub_string1\" with \"$sub_string2\" returned $result"
 					if {$result == 1} {
 						puts $debug_out(1) "test_versions - complex compare strings indicates that available is newer"
 						return "newer"
@@ -7583,8 +7654,8 @@ global debug_out start_time
 					}
 				}
 				puts $debug_out(3) "test_versions - complex compare indicates the strings are the same"
-				set string1 [string range $string1 $failindex1 end]
-				set string2 [string range $string2 $failindex2 end]
+				set string1 [string range $string1 [string length $sub_string1] end]
+				set string2 [string range $string2 [string length $sub_string2] end]
 				set index1 $failindex1 
 				set index2 $failindex2
 				puts $debug_out(3) "test_versions - complex compare now test \"$string1\" with \"$string2\""
@@ -7636,11 +7707,11 @@ global debug_out su_cmd tmp_dir win_mainx win_mainy
 	set index [lsearch -exact $ignored_list $name] 
 	if {$index != -1} {
 		puts $debug_out(2) "toggle_ignored $name exists in ignored_list"
-		set msg_text "was found in the list, $name will be deleted from "
+		set msg_text "was found in the list, $name will be deleted from"
 		set ignored_list [lreplace $ignored_list $index $index]
 	} else {
 		puts $debug_out(2) "toggle_ignored $name does not exist in ignored_list"
-		set msg_text "was not found in the list, $name will be added to "
+		set msg_text "was not found in the list, $name will be added to"
 		lappend ignored_list $name
 	}
 	set ignored_list [lsort -dictionary $ignored_list]
@@ -11262,7 +11333,7 @@ puts $debug_out(1) "THREADS - start threads set up -([expr [clock milliseconds] 
 	set aur_versions_TID [thread::create {
 	
 		proc thread_get_aur_versions {main_TID dlprog tmp_dir list_local} {
-	
+
 			set aur_versions ""
 			set list ""
 			set result ""
@@ -11365,7 +11436,7 @@ puts $debug_out(1) "THREADS - start threads set up -([expr [clock milliseconds] 
 				# aur_versions should now be a clean list of all the updates including all the local packages if requested
 				eval [subst {thread::send -async $main_TID {::put_aur_versions [list $aur_versions]}}]
 			} else {
-				# aur_versions will be empty since ths shell script threw an error
+				# aur_versions will be empty since this shell script threw an error
 				# aur_versions will have to be updated by get_aur_updates
 			}
 	    }
