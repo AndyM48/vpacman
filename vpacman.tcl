@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.3"
+set version "1.4.4"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -127,10 +127,6 @@ Options:
 	}
 }
 
-
-
-
-
 # now test the requirements to run vpacman.tcl
 # check for threads
 
@@ -175,7 +171,7 @@ global config_file
 # ..configurable
 global backup_dir browser buttons editor geometry geometry_view helpbg helpfg icon_dir installed_colour keep_log outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
 # ..variables
-global about_text after_id anchor args aur_all aur_files aur_installs aur_list aur_messages aur_only aur_updates aur_versions backup_log bubble clock_id colours count_all count_installed count_outdated count_uninstalled dataview dbpath depends_searches diffprog dlprog filter filter_list find findfile find_message findtype fs_upgrade geometry_config group group_index help_text index installed_colour is_connected known_browsers known_diffprogs known_editors known_terminals list_all list_groups list_installed list_local list_local_ids list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order local_newer message mirror_countries one_time outdated_colour package_actions pacman_files_upgrade part_upgrade pkgfile_upgrade repo_delete_msg select selected_list selected_message start_time state su_cmd sync_time system_test threads times tv_index tv_select tverr_message tverr_text upgrade_time upgrades upgrades_count version win_configx win_configy win_mainx win_mainy
+global about_text after_id anchor args aur_all aur_files aur_installs aur_list aur_messages aur_only aur_updates aur_versions backup_log bubble clock_id colours count_all count_installed count_outdated count_uninstalled dataview dbpath depends_searches diffprog dlprog filter filter_list find findfile find_message findtype fs_upgrade geometry_config group group_index help_text index installed_colour is_connected known_browsers known_diffprogs known_editors known_terminals list_all list_groups list_installed list_local list_local_ids list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order local_newer message mirror_countries one_time outdated_colour package_actions pacman_files_upgrade part_upgrade pkgfile_upgrade repo_delete_msg select selected_list selected_message start_time state su_cmd sync_time system_test thread threads times tv_index tv_select tverr_message tverr_text upgrade_time upgrades upgrades_count version win_configx win_configy win_mainx win_mainy
 
 # VARIABLES
 
@@ -523,6 +519,8 @@ set sync_time 0
 set system_test "stable"
 # default terminal
 set terminal ""
+# is there a conflicting thread running
+set thread ""
 # threads: is tcl threaded, true or false
 # a list of times returned by get_sync_times - sync_time and update_time
 set times ""
@@ -554,9 +552,9 @@ if {[exec id -u] eq 0 } {
 # if not root then do we have sudo privileges without a password
 } else {
 	# remove any saved credentials
-	set error [catch {exec sudo -k} result]
+	exec sudo -k
 	# and test if a passsword is required
-	set error [catch {exec sudo -n true} result]
+	set error [catch {exec sudo -n true}]
 	if {$error == 0} {
 		set su_cmd "sudo -n"
 		# the -n option is only needed to distinguish the su_cmd from the next one!
@@ -567,12 +565,12 @@ if {[exec id -u] eq 0 } {
 		# so try it
 		# if vpacman was run from a terminal the password request will still be on the screen!
 		# so remove the prompt with -p ""
-		set error [catch {exec sudo -S -v -p "" < /dev/null} result]
+		set error [catch {exec sudo -S -v -p "" < /dev/null} error_message]
 		# what was the result?
 		# if the result includes the user name then it will be a "Sorry ..." result
 		# otherwise it will include sudo: as in "sudo: no password...."
 		# both will be error 1
-		if {[string first "$env(USER)" $result] == -1} {set su_cmd "sudo"}
+		if {[string first "$env(USER)" $error_message] == -1} {set su_cmd "sudo"}
 		# otherwise just use the default
 	}
 }
@@ -1279,7 +1277,7 @@ global aur_list debug_out
 
 proc aur_upgrade {package type} {
 
-global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list_all list_local listview_last_selected listview_selected listview_selected_in_order program_dir save_geometry selected_list su_cmd terminal_string threads tmp_dir	
+global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list_all list_local listview_last_selected listview_selected listview_selected_in_order program_dir save_geometry selected_list su_cmd terminal_string thread threads tmp_dir	
 # download and install or upgrade a package from AUR/Local
 # known types are: 
 #	upgrade (upgrade a selected AUR/Local package), only existing AUR packages can be upgraded - called by invoking .buttonbar.install_button with aur_only
@@ -1372,6 +1370,8 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 			switch $result {
 				same {
 					puts $debug_out(2) "\tand is up to date (indate)"
+					set ans [tk_messageBox -default no -detail "Do you want to reinstall $package?" -icon question -message "The package \"$package\" is already up to date" -parent . -title "Reinstall $package" -type yesno]
+					if {$ans == "cancel"} {return 1}
 					set vstate "indate"
 				}
 				newer {
@@ -1431,11 +1431,19 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 				if {$result == 1} {return 1}
 
 				# if the package does not exist then get_aur_info will return a list of five blank items
-				if {[lindex $result 0] == ""} {
+				set basename [lindex $result 0]
+				if {$basename == ""} {
 					puts $debug_out(1) "aur_upgrade - $package not found in AUR"
 					set_message terminal "ERROR - the package \"$package\" was not found in AUR"
 					after 5000 {set_message terminal ""}
 					return 1
+				}
+				# now check if basename is not the same as the package name
+				if {$basename != $package} {
+					puts $debug_out(2) "aur_upgrade - $package has a basename of $basename"
+					set ans [tk_messageBox -default ok -detail "Do you want to install $basename?" -icon question -message "The package \"$package\" is a part of \"$basename\"" -parent . -title "Install $package" -type okcancel]
+					if {$ans == "cancel"} {return 1}
+					set package $basename
 				}
 				puts $debug_out(2) "aur_upgrade - $type called for $package which exists in AUR"
 			}
@@ -1769,10 +1777,12 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 			set aur_versions ""
 			get_aur_updates
 		} else { 
-			puts $debug_out(2) "start - run threads called test_internet"
+			puts $debug_out(2) "aur_upgrade - run threads called test_internet"
 			if {$threads && [test_internet] == 0} {
 				# now run the aur_versions thread to get the current aur_versions
-				puts $debug_out(1) "Call aur_versions thread with main_TID, dlprog, tmp_dir and list_local"
+				puts $debug_out(1) "aur_upgrade - call aur_versions thread with main_TID, dlprog, tmp_dir and list_local"
+				# this thread may conflict with get_aur_updates so mark it running
+				set thread "running"
 				thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
 			}
 		}
@@ -2106,7 +2116,7 @@ global dataview debug_out list_repos listview_current pacman_files_upgrade pkgfi
 
 proc clean_cache {} {
 
-global debug_out su_cmd win_mainx win_mainy
+global debug_out password su_cmd win_mainx win_mainy
 # clean the pacman cache keeping the last keep_versions package versions and, optionally, remove the uninstalled packages
 	
 	puts $debug_out(1) "clean-cache - called"
@@ -2214,7 +2224,8 @@ global debug_out su_cmd win_mainx win_mainy
 							puts $debug_out(2) "clean_cache - get a password"
 							# get the password
 							set password [get_password ".clean"]
-							if {$password != "--cancelled--"} {
+							# password will be set to an error of 3 if the password procedure was cancelled
+							if {$password != 3} {
 								puts $debug_out(2) "clean_cache - run the script"
 								set error [catch {eval [concat exec $tmp_dir/vpacman.sh $password]} result]
 								# don't save the password
@@ -2891,7 +2902,7 @@ global count_all count_installed count_outdated count_uninstalled debug_out list
 
 proc execute {type} {
 
-global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_out dlprog filter groups listview_last_selected listview_selected listview_selected_in_order list_local list_show list_outdated package_actions part_upgrade selected_list su_cmd sync_time system_test terminal_string threads tmp_dir upgrades
+global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_out dlprog filter groups listview_last_selected listview_selected listview_selected_in_order list_local list_show list_outdated package_actions part_upgrade selected_list su_cmd sync_time system_test terminal_string thread threads tmp_dir upgrades
 # runs whatever we need to do in a terminal window
 
 # known types are delete, install, sync and upgrade_all
@@ -2996,9 +3007,12 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 		set fid [open $tmp_dir/errors r]
 		set errorinfo [read $fid]
 		close $fid
-		# no need to check for 'error 1' which is an aborted script, all errors are checked below
 		file delete $tmp_dir/errors
 		puts $debug_out(2) "execute - read error file, the error file text was:\n$errorinfo"
+		if {[string first "error 1" $errorinfo] != -1} {
+			puts $debug_out(2) "execute - script aborted"
+			return 1
+		}
 		# check the output found - only works if it is in English
 		# check for lock files
 		set lck_dir $dbpath
@@ -3138,9 +3152,14 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 			}
 			puts $debug_out(2) "execute - upgrade_all - reset $ignores package updates ignored in the pacman config file"
 		}
-		# so if the number of packages ignored plus the items upgraded equals the number of packages expected then the upgared completed as expected
+		# so if the number of packages ignored plus the items upgraded equals the number of packages expected then the upgrade completed as expected
 		if {[expr $check_upgrade_list + $ignores] == [llength $upgrade_list]} {
 			puts $debug_out(2) "execute - upgrade_all succeeded"
+			# we must have done a sync so set the sync time and the update time
+			set times [get_sync_time]
+			set sync_time [lindex $times 0]
+			set update_time [lindex $times 1]
+			.filter_upgrade configure -text [clock_format $update_time short_full]
 			# remove any warning label and show the change immediately
 			remove_warning_icon .filter_icons_warning
 			update
@@ -3148,8 +3167,11 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 			if {$ignores != 0} {
 				set action_message "Full System Upgrade succeeded but $ignores packages were ignored. The system may now be unstable."
 			}
-			# the counts and lists will need to be updated
-			set restart true
+			# if no upgrades were needed then do not call restart
+			if {[llength $upgrade_list] != 0} {
+				# the counts and lists will need to be updated
+				set restart true
+			}
 		} else {
 			# if the upgrade_all failed then check the actual result
 			set error 1
@@ -3193,7 +3215,7 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 		if {$count_syncs >= 1} {
 			puts $debug_out(2) "\tSync succeeded"
 			# set the sync time
-			set sync_time [lindex [get_sync_time] 0]
+			set sync_time [lindex [get_sync_time] 0]		 
 		} else {
 			set error 1
 			puts $debug_out(2) "\tSync failed"
@@ -3235,25 +3257,22 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 	update
 	# if we have just run sync or update_all then we are already up to date, if not set_clock will call test_resync in 60 seconds
 	# now update all the lists if we need to
+
 	if {$restart} {
 		puts $debug_out(2) "execute - called the start procedure"
 		# call start
 		start
-		# see if a local package is included in the selections or the list is set to AUR/Local updates
-		if {$aur || $selected_list == "aur_updates"} {
-			puts $debug_out(2) "execute - one or more packages are local, so do not call aur_versions_thread now, leave it to get_aur_versions when it is called by get_aur_updates"
-			puts $debug_out(2) "execute - selected list is $selected_list"
-			set aur_versions ""
-			get_aur_updates
-		} elseif {$threads} {
+		if {$threads} {
 			puts $debug_out(2) "execute - restart (threads) called test_internet"
 			if {[test_internet] == 0} {
 				# and run the aur_versions thread to get the current aur_versions
+				# this thread may conflict with get_aur_updates so mark it running
+				set thread "running"
 				puts $debug_out(2) "execute - call aur_versions thread with main_TID, dlprog, tmp_dir and list_local"
 				thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
 			}
 		} else {
-			puts $debug_out(2) "execute - cannot call aur_versions thread - threading not available"
+			puts $debug_out(2) "execute - cannot call aur_versions thread - threading not available - call get_aur_updates"
 			set aur_versions ""
 			get_aur_updates
 		}
@@ -3278,7 +3297,7 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 					filter_checkbutton ".filter_list_not_required" "pacman -b $tmp_dir -Qtq" "Not Required"
 				}
 				"aur_updates" {
-					# are we running this twice? get_aur_updates will return if aur_versions is not blank
+					# are we running this twice?   will return if aur_versions is not blank
 					get_aur_updates
 				}
 			}
@@ -3325,7 +3344,6 @@ global clock_id debug_out su_cmd terminal_string tmp_dir
 	# now run the command - but send all the output to the terminal AND send any errors to the error file which can be analysed later if necessary
 	# tee will overwrite any existing error file without the -a flag
 	puts $fid "$command > /dev/tty 2>&1 | tee $tmp_dir/errors"
-
 	if {$wait} {
 		puts $fid "pid=\"$!\""
 		puts $fid "wait \$pid"
@@ -3364,7 +3382,13 @@ global clock_id debug_out su_cmd terminal_string tmp_dir
 	puts $debug_out(2) "execute_command - window manager delete window re-instated"
 	# now tidy up
 	file delete "$tmp_dir/vpacman.sh"
-	set fid [open $tmp_dir/errors r]
+	puts $debug_out(2) "execute_command - wait for error file to be written and closed"
+	set error 1
+	while {$error == 1} {
+		set error [catch {set fid [open $tmp_dir/errors r]} error_message]
+		puts $debug_out(3) "execute_command - tried to open $tmp_dir/errors with error: $error - \"$error_message\""
+		after 100
+	}
 	set errors [read $fid]
 	close $fid
 	puts $debug_out(2) "execute_command - errors recorded were:\n\"$errors\""
@@ -4006,8 +4030,8 @@ global aur_list debug_out dlprog tmp_dir
 		}
 		if {$error == 0} {
 			# but any existing packages file from a previous download will still exist
-			set error [catch {exec gunzip -f "$tmp_dir/packages.gz"} result]
-			puts $debug_out(2) "get_aur_list - unzipped package.gz with error $error and result \"$result\""
+			set error [catch {exec gunzip -f "$tmp_dir/packages.gz"} error_message]
+			puts $debug_out(2) "get_aur_list - unzipped package.gz with error: $error - \"$error_message\""
 		} else {
 			set error 1
 			puts $debug_out(2) "get_aur_list - failed to download package.gz"
@@ -4143,65 +4167,69 @@ global aur_list browser debug_out dlprog win_mainx win_mainy
 		button .aurinstall.aurname.get_info \
 			-command {
 				# get the info on the selected package
-				set item [.aurinstall.aurname.list get [.aurinstall.aurname.list curselection]]
-				set info [get_aur_info $item]
-				# get_aur_info will return 1 when there is no download programme or there is no internet
-				if {$info != 1} {
-					set version [lindex $info 1]
-					set description [lindex $info 2]
-					set url [lindex $info 3]
-					set updated [lindex $info 4]
-					set depends [lindex $info 5]
-					set checkdepends [lindex $info 6]
-					set makedepends [lindex $info 7]
-					.aurinstall.aurname.desc_entry configure -state normal
-					.aurinstall.aurname.desc_entry delete 0.0 end
-					.aurinstall.aurname.desc_entry insert end $description		
-					.aurinstall.aurname.desc_entry configure -state disabled
-					# set up a scroll bar if necessary
-					if {[.aurinstall.aurname.desc_entry count -displaylines 0.0 end] > 3} {
-						grid .aurinstall.aurname.desc_scroll -in .aurinstall.aurname -row 3 -column 6 \
-							-sticky ns
+				set error [catch {.aurinstall.aurname.list get [.aurinstall.aurname.list curselection]} item]
+				puts $debug_out(2) ".aurinstall.aurname.list get curselection returned error $error and item $item"
+				if {$error == 0} {
+					set info [get_aur_info $item]
+					# get_aur_info will return 1 when there is no download programme or there is no internet
+					if {$info != 1} {
+						set basename [lindex $info 0]
+						set version [lindex $info 1]
+						set description [lindex $info 2]
+						set url [lindex $info 3]
+						set updated [lindex $info 4]
+						set depends [lindex $info 5]
+						set checkdepends [lindex $info 6]
+						set makedepends [lindex $info 7]
+						.aurinstall.aurname.desc_entry configure -state normal
+						.aurinstall.aurname.desc_entry delete 0.0 end
+						.aurinstall.aurname.desc_entry insert end $description		
+						.aurinstall.aurname.desc_entry configure -state disabled
+						# set up a scroll bar if necessary
+						if {[.aurinstall.aurname.desc_entry count -displaylines 0.0 end] > 3} {
+							grid .aurinstall.aurname.desc_scroll -in .aurinstall.aurname -row 3 -column 6 \
+								-sticky ns
+						}
+						.aurinstall.aurname.version_entry configure -text $version
+						.aurinstall.aurname.url_entry configure -state normal
+						.aurinstall.aurname.url_entry delete 0.0 end
+						.aurinstall.aurname.url_entry insert end $url
+						.aurinstall.aurname.url_entry configure -state disabled
+						# if there is a url then set up a binding for it
+						if {$url != ""} {
+							bind .aurinstall.aurname.url_entry <ButtonRelease-1> {exec $browser [.aurinstall.aurname.url_entry get 0.0 end] &}
+						}
+						.aurinstall.aurname.aur_entry configure -state normal
+						.aurinstall.aurname.aur_entry delete 0.0 end
+						.aurinstall.aurname.aur_entry insert end "https://aur.archlinux.org/packages/${item}/"
+						.aurinstall.aurname.aur_entry configure -state disabled
+						bind .aurinstall.aurname.aur_entry <ButtonRelease-1> {exec $browser "https://aur.archlinux.org/packages/$item" &}
+						.aurinstall.aurname.depends_entry configure -state normal
+						.aurinstall.aurname.depends_entry delete 0.0 end
+						.aurinstall.aurname.depends_entry insert end $depends
+						.aurinstall.aurname.depends_entry configure -state disabled
+						# set up a scroll bar if necessary
+						if {[.aurinstall.aurname.depends_entry count -displaylines 0.0 end] > 3} {
+							grid .aurinstall.aurname.depends_scroll -in .aurinstall.aurname -row 8 -column 6 \
+								-sticky ns
+						}
+						.aurinstall.aurname.updated_entry configure -text $updated
+					} else {
+						.aurinstall.aurname.desc_entry configure -state normal
+						.aurinstall.aurname.desc_entry delete 0.0 end
+						.aurinstall.aurname.desc_entry insert end "Could not get info for [.aurinstall.aurname.list get [.aurinstall.aurname.list curselection]]"	
+						.aurinstall.aurname.desc_entry configure -state disabled
+						grid remove .aurinstall.aurname.desc_scroll
+						.aurinstall.aurname.version_entry configure -text ""
+						.aurinstall.aurname.url_entry configure -state normal
+						.aurinstall.aurname.url_entry delete 0.0 end
+						.aurinstall.aurname.url_entry configure -state disabled
+						.aurinstall.aurname.depends_entry configure -state normal
+						.aurinstall.aurname.depends_entry delete 0.0 end
+						.aurinstall.aurname.depends_entry configure -state disabled
+						grid remove .aurinstall.aurname.depends_scroll
+						.aurinstall.aurname.updated_entry configure -text ""
 					}
-					.aurinstall.aurname.version_entry configure -text $version
-					.aurinstall.aurname.url_entry configure -state normal
-					.aurinstall.aurname.url_entry delete 0.0 end
-					.aurinstall.aurname.url_entry insert end $url
-					.aurinstall.aurname.url_entry configure -state disabled
-					# if there is a url then set up a binding for it
-					if {$url != ""} {
-						bind .aurinstall.aurname.url_entry <ButtonRelease-1> {exec $browser [.aurinstall.aurname.url_entry get 0.0 end] &}
-					}
-					.aurinstall.aurname.aur_entry configure -state normal
-					.aurinstall.aurname.aur_entry delete 0.0 end
-					.aurinstall.aurname.aur_entry insert end "https://aur.archlinux.org/packages/${item}/"
-					.aurinstall.aurname.aur_entry configure -state disabled
-					bind .aurinstall.aurname.aur_entry <ButtonRelease-1> {exec $browser "https://aur.archlinux.org/packages/$item" &}
-					.aurinstall.aurname.depends_entry configure -state normal
-					.aurinstall.aurname.depends_entry delete 0.0 end
-					.aurinstall.aurname.depends_entry insert end $depends
-					.aurinstall.aurname.depends_entry configure -state disabled
-					# set up a scroll bar if necessary
-					if {[.aurinstall.aurname.depends_entry count -displaylines 0.0 end] > 3} {
-						grid .aurinstall.aurname.depends_scroll -in .aurinstall.aurname -row 8 -column 6 \
-							-sticky ns
-					}
-					.aurinstall.aurname.updated_entry configure -text $updated
-				} else {
-					.aurinstall.aurname.desc_entry configure -state normal
-					.aurinstall.aurname.desc_entry delete 0.0 end
-					.aurinstall.aurname.desc_entry insert end "Could not get info for [.aurinstall.aurname.list get [.aurinstall.aurname.list curselection]]"	
-					.aurinstall.aurname.desc_entry configure -state disabled
-					grid remove .aurinstall.aurname.desc_scroll
-					.aurinstall.aurname.version_entry configure -text ""
-					.aurinstall.aurname.url_entry configure -state normal
-					.aurinstall.aurname.url_entry delete 0.0 end
-					.aurinstall.aurname.url_entry configure -state disabled
-					.aurinstall.aurname.depends_entry configure -state normal
-					.aurinstall.aurname.depends_entry delete 0.0 end
-					.aurinstall.aurname.depends_entry configure -state disabled
-					grid remove .aurinstall.aurname.depends_scroll
-					.aurinstall.aurname.updated_entry configure -text ""
 				}
 			} \
 			-text "Get Info" \
@@ -4425,10 +4453,16 @@ global aur_list browser debug_out dlprog win_mainx win_mainy
 
 proc get_aur_updates {} {
 
-global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter filter_list find group list_local selected_list tmp_dir
+global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter filter_list find group list_local selected_list thread tmp_dir
 # check for local packages which may need to be updated
 	
 	puts $debug_out(1) "get_aur_updates called"
+	
+	# If a conflicting thread is running then return
+	if {$thread != ""} {
+		puts $debug_out(1) "get_aur_updates called - but a conflicting thread is already $thread"
+		return 1
+	}
 
 	set aur_only true
 	set aur_updates ""
@@ -4546,8 +4580,14 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 
 proc get_aur_versions {} {
 
-global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog filter filter_list find group list_local selected_list start_time tmp_dir
+global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog filter filter_list find group list_local selected_list start_time thread tmp_dir
 # check for local packages which may need to be updated
+	
+	# If a conflicting thread is running then return
+	if {$thread != ""} {
+		puts $debug_out(1) "get_aur_versions called - but a conflicting thread is already $thread"
+		return 1
+	}
 
 	puts $debug_out(1) "get_aur_versions called - ([expr [clock milliseconds] - $start_time])"
 	# if aur_only is true then this was the last procedure run
@@ -4577,24 +4617,25 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 		puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 		close $fid
 		exec chmod 0755 "$tmp_dir/get_aur_versions.sh"
-		set error [catch {exec "$tmp_dir/get_aur_versions.sh"}]
+
+		puts $debug_out(2) "get_aur_versions - now run $tmp_dir/get_aur_versions.sh"
+		set error [catch {exec "$tmp_dir/get_aur_versions.sh"} error_message]
 		if {$error != 0} {
 			puts $debug_out(1) "get_aur_versions - error getting version info ([expr [clock milliseconds] - $start_time])"
 			tk_messageBox -default ok -detail "Try again later" -icon error -message "Unable to get version information for AUR/Local packages." -parent . -title "Error getting AUR versions" -type ok
 			return 1
 		}
 		file delete "$tmp_dir/get_aur_versions.sh"
-		# check if the file has been written
-		set count 0
-		while {[file readable $tmp_dir/vpacman_aur_result] == 0 && $count < 5} {
+		# check if the file has been written and read the results into a variable 
+		set error 1
+		while {$error == 1} {
+			set error [catch {set fid [open $tmp_dir/vpacman_aur_result r]} error_message]
+			puts $debug_out(3) "get_aur_versions - tried to open $tmp_dir/vpacman_aur_result with error $error and result \"$error_message\""
 			after 100
-			incr count
 		}
-		puts $debug_out(2) "get_aur_versions - found result ([expr [clock milliseconds] - $start_time])"
-		# read the results into a variable 
-		set fid [open $tmp_dir/vpacman_aur_result r]
 		gets $fid result
 		close $fid
+		puts $debug_out(2) "get_aur_versions - found result ([expr [clock milliseconds] - $start_time])"
 		# and delete the temporary file
 		file delete $tmp_dir/vpacman_aur_result
 		# split the result on each "\},\{"
@@ -4668,8 +4709,9 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 			}
 			lappend aur_versions [list $name $version $description]
 		}
-		puts $debug_out(1) "get_aur_versions found AUR package version details - ([expr [clock milliseconds] - $start_time])"
+		puts $debug_out(1) "get_aur_versions found AUR package version details - ([expr [clock milliseconds] - $start_time])"	
 	}
+	return 0
 }
 
 proc get_configs {} {
@@ -5074,9 +5116,9 @@ global debug_out
 
 proc get_password {master} {
 	
-global debug_out env su_cmd win_mainx win_mainy
-# env is a special tcl global variable array
-# returns password or 3 cancelled
+global debug_out env pw_entry su_cmd win_mainx win_mainy
+# env is a system variable
+# returns a password or 3 if cancelled
 
 	puts $debug_out(1) "get_password called"
 	
@@ -5111,23 +5153,15 @@ global debug_out env su_cmd win_mainx win_mainy
 	frame .password.buttons
 		button .password.select \
 			-command {
-				set password [.password.entry get]
-				grab release .password
+				set pw_entry [.password.entry get]
 				destroy .password
-				update
-				puts $debug_out(1) "get_password complete"
-				return $password
 			} \
 			-text "OK" \
 			-width 6
 		button .password.cancel \
 			-command {
-				set password 3
-				grab release .password
+				set pw_entry 3
 				destroy .password
-				update
-				puts $debug_out(1) "get_password cancelled"
-				return $password
 			} \
 			-text "Cancel" \
 			-width 6
@@ -5165,6 +5199,10 @@ global debug_out env su_cmd win_mainx win_mainy
 	update
 	grab set .password
 	focus .password.entry
+	
+	tkwait window .password
+	puts "Password Window Closed ($pw_entry)"
+	return $pw_entry
 
 }
 
@@ -5226,7 +5264,7 @@ global debug_out start_time su_cmd terminal terminal_string tmp_dir
 				puts $debug_out(2) "get_terminal - get a password"
 				# get the password
 				set password [get_password "."]
-				tkwait window .password
+				# password will be set to an error of 3 if the password procedure was cancelled
 				if {$password != 3} {
 					puts $debug_out(2) "get_terminal - run the script"
 					set error [catch {eval [concat exec $tmp_dir/vpacman.sh $password]} result]
@@ -5254,12 +5292,12 @@ global debug_out start_time su_cmd terminal terminal_string tmp_dir
 				file delete $tmp_dir/vpacman.sh
 				file delete $tmp_dir/errors
 			} else {
-				set error [catch {eval [concat exec $su_cmd pacman --noconfirm -S xterm]} result]
+				set error [catch {eval [concat exec $su_cmd pacman --noconfirm -S xterm]} error_message]
 			}
 		}
 		# we could check for an error or simply check that xterm has been installed
 		if {[catch {exec which xterm}] == 1} {
-			puts $debug_out(2) "get_terminal - install xterm failed error $error and result $result"
+			puts $debug_out(2) "get_terminal - install xterm failed error: $error - \"$error_message\""
 		} else {
 			puts $debug_out(2) "get_terminal - installed xterm"
 			set terminal "xterm"
@@ -5383,9 +5421,12 @@ global debug_out group group_index list_groups
 		focus .group_entry
 	}
 	bind .listgroups <<ListboxSelect>>  {
-		set group [.listgroups get [.listgroups curselection]]
-		filter
-		grid_remove_listgroups
+		# .listgroups curselection should not be blank, but check anyway
+		if {[.listgroups curselection] != ""} {
+			set group [.listgroups get [.listgroups curselection]]
+			filter
+			grid_remove_listgroups
+		}
 	}
 	bind .menubar <ButtonRelease-1> {
 		grid_remove_listgroups
@@ -5752,11 +5793,11 @@ global backup_dir debug_out
 		exec pacman -Qqem > $backup_dir/aur_local$date.txt
 		# copy the pacman configureation file
 		file copy -force /etc/pacman.conf $backup_dir/pacman$date.conf
-	} result]
-	puts $debug_out(2) "Lists completed with error $error and result $result"
+	} error_message]
+	puts $debug_out(2) "Lists completed with error: $error - \"error_message\""
 	if {$error != 0} {
-		puts $debug_out(1) "make_backup_lists failed with error $error and result $result"
-		tk_messageBox -default ok -detail "$result" -icon error -message "Failed to make the backup lists." -parent . -title "Error." -type ok 
+		puts $debug_out(1) "make_backup_lists failed with error: $error - \"$error_message\""
+		tk_messageBox -default ok -detail "$error_message" -icon error -message "Failed to make the backup lists." -parent . -title "Error." -type ok 
 		return 1
 	} else {
 		set text "
@@ -6121,8 +6162,8 @@ global debug_out mirror_countries su_cmd tmp_dir
 		# get the password
 		grab release .update_mirrors
 		set password [get_password ".update_mirrors"]
-		grab set .update_mirrors
-		if {$password != "--cancelled--"} {
+		# password will be set to an error of 3 if the password procedure was cancelled
+		if {$password != 3} {
 			set error [catch {eval [concat exec "$tmp_dir/vpacman.sh $password"]} result]
 			# don't save the password
 			unset password
@@ -6463,11 +6504,20 @@ global aur_files debug_out start_time
 
 proc put_aur_versions {versions} {
 	
-global aur_all aur_versions debug_out filter filter_list find group list_all list_local list_local_ids list_show local_newer selected_list start_time tmp_dir
+global aur_all aur_versions debug_out filter filter_list find group list_all list_local list_local_ids list_show local_newer selected_list start_time thread tmp_dir
 # put the version and description found for a local package into list_all list_show list_local and treeview
 # this procedure is called by a thread
 	
 	puts $debug_out(1) "put_aur_versions - called ([expr [clock milliseconds] - $start_time])"
+	# and what if the thread was running but failed?	
+	if {$versions == "failed"} {
+		puts $debug_out(1) "put_aur_versions - aur_versions thread exited with failed state - call get_aur_versions"
+		set thread ""
+		set aur_versions ""
+		get_aur_versions	
+		return 1
+	}
+		
 	set aur_versions $versions
 	# reset the number of local files that need to be updated
 	set local_newer 0
@@ -6564,6 +6614,8 @@ global aur_all aur_versions debug_out filter filter_list find group list_all lis
 		puts $debug_out(2) "put_aur_versions - configured text to local_newer \"AUR/Local Updates ($local_newer)\""
 		.filter_list_aur_updates configure -text "AUR/Local Updates ($local_newer)"
 	}
+	puts $debug_out(3) "put_aur_versions - unset thread"
+	set thread ""
 	puts $debug_out(1) "put_aur_versions - completed ([expr [clock milliseconds] - $start_time])"
 }
 
@@ -7174,21 +7226,6 @@ global aur_versions_TID debug_out dlprog filter find fs_upgrade list_local sync_
 		return 1
 	}
 	set fs_upgrade false
-	# call start
-	puts $debug_out(2) "system_upgrade - call start"
-	start
-	if {$threads} {
-		puts $debug_out(2) "system_upgrade - restart (threads) called test_internet"
-		if {[test_internet] == 0} {
-			# and run the aur_versions thread to get the current aur_versions
-			puts $debug_out(2) "system_upgrade - call aur_versions thread with main_TID, dlprog, tmp_dir and list_local"
-			thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
-		}
-	} else {
-		puts $debug_out(2) "system_upgrade - cannot call aur versions thread - threading not available"
-		# so set aur_versions to "" so that get_aur_updates will get the versions when it runs next
-		set aur_versions ""
-	}
 	filter
 	puts $debug_out(1) "system_upgrade - completed"
 }
@@ -7235,7 +7272,7 @@ global browser debug_out editor known_browsers known_editors known_terminals one
 		configurable_default terminal $known_terminals
 	} 
 	# the terminal must exist
-	if {$terminal == ""} {#
+	if {$terminal == ""} {
 		puts $debug_out(2) "test_configs - no terminal specified"
 		set_message terminal "Error: A terminal is required"
 		get_terminal
@@ -7358,7 +7395,7 @@ global debug_out is_connected start_time
 	while {$count < 3} {
 		# bypass the ping dns lookup in case it takes too long
 		# uses IPv4 which should work for everyone
-		set error [catch {exec getent ahostsv4 $try($count)} result]
+		set error [catch {exec timeout 3 getent ahostsv4 $try($count)} result]
 		puts $debug_out(2) "test_internet - ran gentent with error $error and result \"$result\""
 		# if we have a result
 		if {$error == 0} {
@@ -7387,7 +7424,7 @@ global debug_out is_connected start_time
 
 proc test_resync {} {
 
-global aur_versions_TID debug_out dlprog list_local threads sync_time tmp_dir
+global aur_versions_TID debug_out dlprog list_local thread threads sync_time tmp_dir
 # test if a resync is required after a failed update or an external intervention
 
 	puts $debug_out(1) "test_resync called - sync_time is $sync_time"
@@ -7431,6 +7468,8 @@ global aur_versions_TID debug_out dlprog list_local threads sync_time tmp_dir
 				puts $debug_out(2) "test_resync - restart (threads) called test_internet"
 				if {[test_internet] == 0} {
 					# and run the aur_versions thread to get the current aur_versions
+					# this thread may conflict with get_aur_updates so mark it running
+					set thread "running"
 					puts $debug_out(2) "test_resync - call aur_versions thread with main_TID, dlprog, tmp_dir and list_local"
 					thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
 				} else {
@@ -7454,7 +7493,7 @@ global debug_out start_time system_test
 	
 	if {$result == ""} {
 		# looks like we are being asked to update the system status
-		set error [catch {exec pacman -Qu} result]
+		set error [catch {exec pacman -Qu}]
 		if {$error == 0} {
 			set result "unstable"
 		} else {
@@ -7580,8 +7619,8 @@ global debug_out start_time
 				set failindex1 0
 				set failindex2 0
 				# does each string start with an alpha sub string
-				set result [string is alpha -failindex failindex1 $string1]
-				puts $debug_out(3) "test_versions - complex compare is \"$string1\" alpha? Results is $result, Fail index is $failindex1"
+				set result [string is alpha -failindex failindex1 "$string1"]
+				puts $debug_out(3) "test_versions - complex compare new part is \"$string1\" alpha? Result is $result, Fail index is $failindex1"
 				# what type is string1 
 				if {$result == 1} {
 					puts $debug_out(3) "test_versions - complex compare \"$string1\" is alpha"
@@ -7596,8 +7635,8 @@ global debug_out start_time
 					}
 				}
 				# what type is string2
-				set result [string is alpha -failindex failindex2 \"$string2\"]
-				puts $debug_out(3) "test_versions - complex compare is \"$string2\" alpha? Results is $result, Fail index is $failindex2"
+				set result [string is alpha -failindex failindex2 "$string2"]
+				puts $debug_out(3) "test_versions - complex compare old part is \"$string2\" alpha? Results is $result, Fail index is $failindex2"
 				# is string1 alpha
 				if {$result == 1} {
 					puts $debug_out(3) "test_versions - complex compare \"$string2\" is alpha"
@@ -7703,7 +7742,8 @@ global debug_out su_cmd tmp_dir win_mainx win_mainy
 
 	puts $debug_out(1) "toggle_ignored called"
 	set detail ""
-	set ignored_list [find_pacman_config ignored]
+	set ignored_list [find_pacman_config all_ignored]
+	puts $debug_out(2) "toggle_ignored - ignored list is \"$ignored_list\""
 	set index [lsearch -exact $ignored_list $name] 
 	if {$index != -1} {
 		puts $debug_out(2) "toggle_ignored $name exists in ignored_list"
@@ -7772,7 +7812,7 @@ global debug_out su_cmd tmp_dir win_mainx win_mainy
 			exec chmod 0755 "$tmp_dir/vpacman.sh"
 			# get the password
 			set password [get_password "."]
-			tkwait window .password
+			# password will be set to an error of 3 if the password procedure was cancelled
 			if {$password != 3} {
 				puts $debug_out(2) "toggle_ignored - now run the shell script"
 				set error [catch {eval [concat exec "$tmp_dir/vpacman.sh $password"]} result]
@@ -7801,14 +7841,14 @@ global debug_out su_cmd tmp_dir win_mainx win_mainy
 			}
 		} else {
 			puts $debug_out(2) "toggle_ignored - copy pacman.conf file to backup"
-			set error [catch {eval [concat exec $su_cmd cp -p /etc/pacman.conf /etc/pacman.conf.bak]} result]
+			set error [catch {eval [concat exec $su_cmd cp -p /etc/pacman.conf /etc/pacman.conf.bak]} error_message]
 			if {$error != 0} {
-				puts $debug_out(2) "toggle_ignored - backup config file failed with error $error and result $result"
+				puts $debug_out(2) "toggle_ignored - backup config file failed with error: $error - \"$error_message\""
 				set detail "Could not backup config file - Toggle ignored cancelled"
 			} else {
-				set error [catch {eval [concat exec $su_cmd cp $tmp_dir/pacman.conf /etc/pacman.conf]} result]
+				set error [catch {eval [concat exec $su_cmd cp $tmp_dir/pacman.conf /etc/pacman.conf]} error_message]
 				if {$error != 0} {
-					puts $debug_out(2) "toggle_ignored - copy new config file failed"
+					puts $debug_out(2) "toggle_ignored - copy new config file failed with error: $error - \"$error_message\""
 					set detail "Could not write new config file - Toggle ignored failed"
 				} 
 			}	
@@ -7817,6 +7857,14 @@ global debug_out su_cmd tmp_dir win_mainx win_mainy
 		file delete $tmp_dir/pacman.conf
 		if {$detail != ""} {
 			tk_messageBox -default ok -detail "$detail" -icon error -message "Failed to complete updating the ignored package list." -parent . -title "Error" -type ok	
+		} else {
+			if {[string first "added" $msg_text] != -1} {
+				# $name has been added to the ignored list
+				set_message terminal "$name will be ignored"
+			} else {
+				set_message terminal "$name will no longer be ignored"
+			}
+			after 3000 {set_message reset ""}
 		}
 		puts $debug_out(1) "toggle_ignored - completed"
 		return 0
@@ -7985,8 +8033,8 @@ global backup_dir backup_log debug_out keep_log su_cmd win_mainx win_mainy
 							# get the password
 							grab release .trim
 							set password [get_password ".trim"]
-							# no need to reinstate the grab because .trim will be closed
-							if {$password != "--cancelled--"} {
+							# password will be set to an error of 3 if the password procedure was cancelled
+							if {$password != 3} {
 								puts $debug_out(2) "trim_log - now run the shell script"
 								set error [catch {eval [concat exec "$tmp_dir/vpacman.sh" $password]} result]
 								# don't save the password
@@ -8015,16 +8063,16 @@ global backup_dir backup_log debug_out keep_log su_cmd win_mainx win_mainy
 						} else {
 							if {$backup_log == yes} {
 								puts $debug_out(2) "trim_log - Copy log file to backup"
-								set error [catch {eval [concat exec $su_cmd cp $logfile $backup_dir/[file tail $logfile].bak]} result]
+								set error [catch {eval [concat exec $su_cmd cp $logfile $backup_dir/[file tail $logfile].bak]} error_message]
 								if {$error != 0} {
-									puts $debug_out(2) "trim_log - Backup log file failed with error $error and result $result"
+									puts $debug_out(2) "trim_log - Backup log file failed with error: $error - \"$error_message\""
 									set_message terminal "Could not backup log file - Clean Pacman Log cancelled"
 								}
 							}
 							if {$error == 0} {
-								set error [catch {eval [concat exec $su_cmd cp $tmp_dir/pacman.log.tmp $logfile]} result]
+								set error [catch {eval [concat exec $su_cmd cp $tmp_dir/pacman.log.tmp $logfile]} error_message]
 								if {$error != 0} {
-									puts $debug_out(2) "trim_log - Copy new log file failed"
+									puts $debug_out(2) "trim_log - Copy new log file failed with error: $error - \"$error_message\""
 									set_message terminal "Could not write new log file - Clean Pacman Log failed"
 								} 
 							}
@@ -8118,6 +8166,7 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 	set source_files ""
 	set destination ""
 	set destination_files ""
+	set detail ""
 	
 	# make sure that any temporary directory from before was deleted
 	file delete -force $tmp_dir/config_files
@@ -8185,7 +8234,7 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 		# get the password
 		grab release .
 		set password [get_password "."]
-		tkwait window .password
+		# password will be set to an error of 3 if the password procedure was cancelled
 		if {$password != 3} {
 			puts $debug_out(2) "update_config_files - now run the shell script"
 			set error [catch {eval [concat exec "$tmp_dir/vpacman.sh $password"]} result]
@@ -8214,19 +8263,25 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 	} else {
 		foreach {file permissions owner group} $source_files {
 			puts $debug_out(2) "update_config_files - cp $file $tmp_dir/config_files/$file"
-			set error [catch {eval [concat exec $su_cmd cp $file $tmp_dir/config_files/$file]} result]
-			puts $debug_out(2) "\tcp $file error $error result $result"
-			set error [catch {eval [concat exec $su_cmd chmod 0666 $tmp_dir/config_files/$file]} result]
-			puts $debug_out(2) "\tchmod $tmp_dir/config_files/$file error $error result $result"
+			set error [catch {eval [concat exec $su_cmd cp $file $tmp_dir/config_files/$file]} error_message]
+			puts $debug_out(2) "\tcp $file error: $error - \"$error_message\""
+			# if the file was not copied then this will be an error as well
+			set error [catch {eval [concat exec $su_cmd chmod 0666 $tmp_dir/config_files/$file]} error_message]
+			puts $debug_out(2) "\tchmod $tmp_dir/config_files/$file error: $error - \"$error_message\""
 			set destination [lindex $destination_files $index]
-			if {$destination != "-none-"} {
+			# if the source file was not copied correctly then do not copy the destination file
+			if {$error == 0 && $destination != "-none-"} {
 				puts $debug_out(2) "update_config_files - cp $destination $tmp_dir/config_files/$destination"
-				set error [catch {eval [concat exec $su_cmd cp $destination $tmp_dir/config_files/$destination]} result]
-				puts $debug_out(2) "\tcp $destination error $error result $result"
-				set error [catch {eval [concat exec $su_cmd chmod 0666 $tmp_dir/config_files/$destination]} result]
-				puts $debug_out(2) "\tchmod $tmp_dir/config_files/$destination error $error result $result"
+				set error [catch {eval [concat exec $su_cmd cp $destination $tmp_dir/config_files/$destination]} error_message]
+				puts $debug_out(2) "\tcp $destination error: $error - \"$error_message\""
+				set error [catch {eval [concat exec $su_cmd chmod 0666 $tmp_dir/config_files/$destination]} error_message]
+				puts $debug_out(2) "\tchmod $tmp_dir/config_files/$destination error: $error - \"$error_message\""
 			}
-			set detail "Could not make a working copy of the config files."
+			# if we have an error here then something failed so
+			if {$error != 0} {
+				set detail "Could not make a working copy of the config files."
+				break
+			}
 			incr index +4
 		}
 	}
@@ -8630,7 +8685,8 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 					exec chmod 0755 "$tmp_dir/vpacman.sh"
 					# get the password
 					set password [get_password ".update_configs"]
-					if {$password != "--cancelled--"} {
+					# password will be set to an error of 3 if the password procedure was cancelled
+					if {$password != 3} {
 						puts $debug_out(2) "update_config_files - now run the shell script"
 						set error [catch {eval [concat exec "$tmp_dir/vpacman.sh $password"]} result]
 						# don't save the password
@@ -8659,12 +8715,12 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 					foreach {file permissions owner} $set_permissions {
 						set path [string range $file [string length "$tmp_dir/config_files"] end]
 						# only copy the file back if it has been changed
-						set error [catch {eval [concat exec $su_cmd cmp $file $path]} result]
+						set error [catch {eval [concat exec $su_cmd cmp $file $path]}]
 						if {$error == 1} {
 							puts $debug_out(2) "update_config_files - chmod $file and copy $file to $path"
-							set error [catch {eval [concat exec $su_cmd chmod $permissions $file]} result]
+							set error [catch {eval [concat exec $su_cmd chmod $permissions $file]}]
 							if {$error == 0} {
-								set error [catch {eval [concat exec $su_cmd cp -p $file $path]} result]
+								set error [catch {eval [concat exec $su_cmd cp -p $file $path]}]
 							}
 							if {$error != 0} {
 								set detail "Could not commit config file changes - update config files cancelled"
@@ -8677,7 +8733,7 @@ global editor debug_out diffprog su_cmd tmp_dir win_mainx win_mainy
 					# if the folder copy did not complete then do not remove any files
 					puts $debug_out(2) "update_config_files - now remove any files if error ($error) is 0 and the number of files to delete ([llength $delete_files]) is not zero"
 					if {$error == 0 && [llength $delete_files] != 0} {
-						set error [catch {eval [concat exec $su_cmd rm $delete_files]} result]
+						set error [catch {eval [concat exec $su_cmd rm $delete_files]}]
 						if {$error != 0} {
 							puts $debug_out(2) "update_config_files - commit config file changes failed"
 							set detail "Could not remove $delete_files\n\nCommit config files failed"
@@ -8836,7 +8892,7 @@ global debug_out home su_cmd tmp_dir
 		exec chmod 0755 "$tmp_dir/vpacman.sh"
 		# get the password
 		set password [get_password "."]
-		tkwait window .password
+		# password will be set to an error of 3 if the password procedure was cancelled
 		if {$password != 3} {
 			set error [catch {eval [concat exec "$tmp_dir/vpacman.sh $password"]} result]
 			# don't save the password
@@ -8844,47 +8900,55 @@ global debug_out home su_cmd tmp_dir
 			puts $debug_out(2) "update_cups - ran vpacman.sh with error $error and result \"$result\""
 		} else {
 			unset password
-			set error 1
-			set result "Authentication failure"
 			puts $debug_out(2) "update_cups - get_password cancelled"
+			file delete $tmp_dir/vpacman.sh
+			file delete $tmp_dir/errors
+			return 1
 		}
 		if {$error != 0} {
 			# language - Authentication failure/Sorry, try again. occur only in English, or on Password cancelled (above)
 			# the second error message will be displayed instead, which is not too bad.
 			if {[string first "Authentication failure" $result] != -1 || [string first "Sorry, try again." $result] != -1} {
 				puts $debug_out(1) "update_cups - Authentification failed"
-				set detail "Authentification failed - update_cups cancelled"
+				set error_message "Authentification failed - update_cups cancelled"
 			} else {
 				puts $debug_out(1) "update_cups- update_cups failed"
-				set detail "Could not update cups - Update cups cancelled"
+				set error_message "Could not update cups - Update cups cancelled"
 			}
+			tk_messageBox -default ok -detail "$error_message" -icon error -message "Error while restarting cups" -parent . -title "Update Cups" -type ok  
 			file delete $tmp_dir/vpacman.sh
 			file delete $tmp_dir/errors
 			return 1
+		}
+		# we do not need a password for this, but nor do we want to run it if the password authentification failed
+		set cups_gen_return [catch {exec which cups-genppdupdate}]
+		if {$cups_gen_return != 1} {
+			puts $debug_out(2) "update_cups - run cups-genppdupdate"
+			set error [catch {eval [concat exec cups-genppdupdate]} result]
+			set message "${result}. "
+			puts $debug_out(2) "update_cups - message set to $message"
 		} 
 		# now check for recorded errors
 		set fid [open $tmp_dir/errors r]
 		set result [read $fid]
 		close $fid
-
-		if {$cups_gen_return != -1} {set message "[lindex [split $result \n] 0]. "}
-
+		puts $debug_out(2) "update_cups - completed with the following result:\n\t$result"
 	} else {
 		# OK, we can do this without a password
-		set return [catch {exec which cups-genppdupdate}]
-		if {$return != 1} {
+		set cups_gen_return [catch {exec which cups-genppdupdate}]
+		if {$cups_gen_return != 1} {
 			puts $debug_out(2) "update_cups - run cups-genppdupdate"
-			set return [catch {eval [concat exec $su_cmd cups-genppdupdate]} result]
+			set error [catch {eval [concat exec cups-genppdupdate]} result]
 			set message "${result}. "
 			puts $debug_out(2) "update_cups - message set to $message"
 		}
 		puts $debug_out(2) "update_cups - reloading daemons"
 		catch {exec $su_cmd systemctl daemon-reload}
 		puts $debug_out(2) "update_cups - restart cups"
-		set return [catch {eval [concat exec $su_cmd systemctl restart org.cups.cupsd]} result]
-		if {$return != 0} {
-			puts $debug_out(1) "update_cups - error while restarting cups: $result"
-			tk_messageBox -default ok -detail "" -icon error -message "Error while restarting cups" -parent . -title "Update Cups" -type ok  
+		set error [catch {eval [concat exec $su_cmd systemctl restart org.cups.cupsd]} error_message]
+		if {$error != 0} {
+			puts $debug_out(1) "update_cups - error while restarting cups: $error_message"
+			tk_messageBox -default ok -detail "$error_message" -icon error -message "Error while restarting cups" -parent . -title "Update Cups" -type ok  
 			file delete $tmp_dir/vpacman.sh
 			file delete $tmp_dir/errors
 			return 1
@@ -9831,12 +9895,20 @@ frame .filters
 		
 	checkbutton .filter_list_aur_updates \
 		-command {
+			puts $debug_out(3) ".filter_list_aur_updates - called with $thread"
+			# do not execute until the thread has completed
+			if {$thread != ""} {
+				puts $debug_out(3) ".filter_list_aur_updates - aur_versions thread is $thread"
+				tkwait variable thread
+			}
 			update idletasks
 			if {$selected_list == 0} {
 				set filter "all"
 				cleanup_checkbuttons false
+				puts $debug_out(3) ".filter_list_aur_updates - call filter"
 				filter
 			} else {
+				puts $debug_out(3) ".filter_list_aur_updates - call get_aur_updates"
 				get_aur_updates
 			}			
 		} \
@@ -9851,17 +9923,18 @@ frame .filters
 	checkbutton .filter_list_aur_updates_all \
 		-command {
 			update idletasks
-			puts $debug_out(1) "aur_all set to $aur_all"
+			puts $debug_out(1) ".filter_list_aur_updates_all - aur_all set to $aur_all"
 			if {$aur_all} {
-				puts $debug_out(2) ".filter_list_aur_updates - configured text \"AUR/Local Packages ([llength $list_local])\""
+				puts $debug_out(2) ".filter_list_aur_updates_all - configured text \"AUR/Local Packages ([llength $list_local])\""
 				.filter_list_aur_updates configure -text "AUR/Local Packages ([llength $list_local])"
 				balloon_set .filter_list_aur_updates "List all AUR/Local packages which have been installed"
 			} else {
-				puts $debug_out(2) ".filter_list_aur_updates - configured text to local_newer \"AUR/Local Updates ($local_newer)\""
+				puts $debug_out(2) ".filter_list_aur_updates_all - configured text to local_newer \"AUR/Local Updates ($local_newer)\""
 				.filter_list_aur_updates configure -text "AUR/Local Updates ($local_newer)"
 				balloon_set .filter_list_aur_updates "List only local packages which may need to be updated"
 			}
 			if {$selected_list == "aur_updates"} {
+				puts $debug_out(3) ".filter_list_aur_updates_all - call get_aur_updates"
 				get_aur_updates
 			}
 		} \
@@ -10741,7 +10814,7 @@ frame .wp.wfone \
 				exec chmod 0755 "$tmp_dir/vpacman.sh"
 				# get the password
 				set password [get_password "."]
-				tkwait window .password
+				# password will be set to an error of 3 if the password procedure was cancelled
 				if {$password != 3} {
 					set error [catch {eval [concat exec "$tmp_dir/vpacman.sh $password"]} result]
 					# don't save the password
@@ -10765,10 +10838,11 @@ frame .wp.wfone \
 				} else {
 					set_message terminal "Marked $package as explicitly installed"
 				}
+				
 			} else {
 				puts $debug_out(1) "mark --asexplicit ran \"exec $su_cmd pacman -D --asexplicit $package\""
-				set error [catch {eval [concat exec $su_cmd pacman -D --asexplicit $package]} result]
-				puts $debug_out(1) "mark --asexplicit called with Error $error and Result $result"
+				set error [catch {eval [concat exec $su_cmd pacman -D --asexplicit $package]} error_message]
+				puts $debug_out(1) "mark --asexplicit called with error: $error - \"$error_message\""
 				if {$error != 0} {
 					set_message terminal "Pacman returned an error marking $package as explicitly installed"
 				} else {
@@ -10780,7 +10854,7 @@ frame .wp.wfone \
 			set dataview ""
 			# and update dataview
 			get_dataview [.wp.wfone.listview selection]
-			after 5000 {set_message terminal ""}
+			after 3000 {set_message reset ""}
 		}
 		.listview_popup.mark add command -label "Installed as a dependancy" -command {
 			set package [lrange [.wp.wfone.listview item  [.wp.wfone.listview selection] -values] 1 1] 
@@ -10799,7 +10873,7 @@ frame .wp.wfone \
 				exec chmod 0755 "$tmp_dir/vpacman.sh"
 				# get the password
 				set password [get_password "."]
-				tkwait window .password
+				# password will be set to an error of 3 if the password procedure was cancelled
 				if {$password != 3} {
 					set error [catch {eval [concat exec "$tmp_dir/vpacman.sh $password"]} result]
 					# don't save the password
@@ -10825,8 +10899,8 @@ frame .wp.wfone \
 				}
 			} else {
 				puts $debug_out(1) "mark --asdeps ran \"exec $su_cmd pacman -D --asdeps $package\""
-				set error [catch {eval [concat exec $su_cmd pacman -D --asdeps $package]} result]
-				puts $debug_out(1) "mark --asdeps called with Error $error and Result $result"
+				set error [catch {eval [concat exec $su_cmd pacman -D --asdeps $package]} error_message]
+				puts $debug_out(1) "mark --asdeps called with error: $error - \"$error_message\""
 				if {$error != 0} {
 					set_message terminal "Pacman returned an error marking $package as a dependancy"
 				} else {
@@ -10838,7 +10912,7 @@ frame .wp.wfone \
 			set dataview ""
 			# and update dataview
 			get_dataview [.wp.wfone.listview selection]
-			after 5000 {set_message terminal ""}
+			after 3000 {set_message reset ""}
 		}
 		.listview_popup.mark add command -label "Ignored \[toggle\]" -command {toggle_ignored [lrange [.wp.wfone.listview item  [.wp.wfone.listview selection] -values] 1 1]}
 				
@@ -11352,7 +11426,8 @@ puts $debug_out(1) "THREADS - start threads set up -([expr [clock milliseconds] 
 			}	
 			close $fid
 			exec chmod 0755 "$tmp_dir/thread_aur_versions.sh"
-			set error [catch {exec "$tmp_dir/thread_aur_versions.sh"} result]
+			set error [catch {exec "$tmp_dir/thread_aur_versions.sh"}]
+
 			file delete "$tmp_dir/thread_aur_versions.sh"
 			
 			if {$error == 0} {
@@ -11438,6 +11513,7 @@ puts $debug_out(1) "THREADS - start threads set up -([expr [clock milliseconds] 
 			} else {
 				# aur_versions will be empty since this shell script threw an error
 				# aur_versions will have to be updated by get_aur_updates
+				eval [subst {thread::send -async $main_TID {::put_aur_versions "failed"}}]
 			}
 	    }
 	    thread::wait
@@ -11529,11 +11605,20 @@ if {$dlprog == ""} {
 	tk_messageBox -default ok -detail "No download programme found" -icon warning -message "Pacman cannot function without an installed download programme (curl or wget)." -parent . -title "Warning" -type ok
 }
 puts $debug_out(1) "START - download programme set to $dlprog ([expr [clock milliseconds] - $start_time])"
-puts $debug_out(1) "START - threads is $threads"
+puts $debug_out(1) "START - threads is $threads ([expr [clock milliseconds] - $start_time])"
 if {$threads} {
 	puts $debug_out(1) "START (threads) called test_internet"
 	if {[test_internet] == 0} {
 		# if the internet is up then run the aur_versions thread to get the current aur_versions
+		# this thread may conflict with get_aur_updates so mark it running and set an appropriate label
+		set thread "running"
+		if {$aur_all} {
+			puts $debug_out(2) "START (threads) - configured text \"AUR/Local Packages (..)\""
+			.filter_list_aur_updates configure -text "AUR/Local Packages (..)"
+		} else {
+			puts $debug_out(2) "START (threads) - configured text \"AUR/Local Updates (..)\""
+			.filter_list_aur_updates configure -text "AUR/Local Updates (..)"
+		}
 		puts $debug_out(1) "START - call aur_versions thread with main_TID, dlprog, tmp_dir and list_local ([expr [clock milliseconds] - $start_time])"
 		thread::send -async $aur_versions_TID [list thread_get_aur_versions [thread::id] $dlprog $tmp_dir $list_local]
 	}
