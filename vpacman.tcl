@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.4"
+set version "1.4.5"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -385,7 +385,7 @@ The main window consists of a menu bar, a toolbar, a set of filter and list opti
 	<lm2>Sync > Ask pacman to synchronize the pacman database. The elapsed time since the last synchronization is shown at the foot of the filter and list options. If no recent synchronization has been made then the elapsed time shows the time since Vpacman was started.</lm2>
 	<lm2>Install > Ask pacman to install or update the selected packages. Note that AUR packages (local) can only be updated one at a time through AUR/Local Updates.</lm2>
 	<lm2>Delete > Ask pacman to delete the selected packages.</lm2>
-	<lm2>Find > Enter any string to search for in the list of packages displayed. The search will be carried out over all the fields of the packages listed, including the description but excluding the repository name. Click on the label \"Find\" to change to a search the package names only, click again to search for the packages providing a specified file. Enter the full path to the file to search for, and press return to start the search. On the first search during any day, a prompt will ask if the file database should be updated if necessary. Click on the label again to return to the \"Find\" option.</lm2>
+	<lm2>Find > Enter any string to search for in the list of packages displayed. The search will be carried out over all the fields of the packages listed, including the description but excluding the repository name. Click on the label \"Find\" to change to a search the package names only, click again to search for the packages providing a specified file. Enter the full name of the file to search for, and press return to start the search. On the first search during any day, if necessary, a prompt will ask if the file database should be updated. Click on the label again to return to the \"Find\" option.</lm2>
 	<lm2>Options > Change any of the configurable options for Vpacman. Allows for editing the configuration file manually, which could break Vpacman! In case of any problems delete the configuration file \"$ rm ~/.vpacman.config\" to return all the values to sane defaults.</lm2>		
 
 <strong>Filters:</strong>
@@ -658,6 +658,8 @@ puts $debug_out(1) "Version $version: User is $env(USER) - Home is $home - Confi
 #		can take a while to retrieve, show a searching message where necessary.
 # proc get_file_mtime
 # 	Get the  last modified time for a set of files
+# proc get_mirrorlist
+#	Get the latest mirrorlist
 # proc get_password
 #	Get a password whenever needed.
 # proc get_sync_time
@@ -1773,7 +1775,7 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 		# call start
 		start
 		if {$package_type == "aur_local" || $package_type == "none"} {
-			puts $debug_out(2) "aur_upgrade - $package is aur_local or none, so do not call aur_versions_thread now, leave it to get_aur_versions when it is called by get_aur_updates"
+			puts $debug_out(2) "aur_upgrade - $package is AUR or local (or none), so do not call aur_versions_thread now, leave it to get_aur_versions when it is called by get_aur_updates"
 			set aur_versions ""
 			get_aur_updates
 		} else { 
@@ -2002,7 +2004,11 @@ global dataview debug_out list_repos listview_current pacman_files_upgrade pkgfi
 		set sync_dbs [glob -nocomplain "$dir/*.$tail"]
 	}
 	puts $debug_out(2) "\tfound $sync_dbs"
-	# delete any files which are no longer valid
+	# we could delete any files which are no longer valid
+	# but then we might have to get a password for no apparent reason
+	# or we could ask if we should delete them
+	# but that risks continually asking the same question if the answer was no
+	# for the moment just list the files no longer required in the debug output
 	puts $debug_out(2) "check_repo_files - check that repo exists in $sync_dbs"
 	foreach item $sync_dbs {
 		set file [file tail [file rootname $item]]
@@ -2010,9 +2016,9 @@ global dataview debug_out list_repos listview_current pacman_files_upgrade pkgfi
 		if {[string first $file $list_repos] == -1} {
 			puts $debug_out(3) "check_repo_files - delete $file - not in $list_repos"
 			if {$dir == $tmp_dir} {
-				file delete $dir/${file}.db $dir/sync/${file}.files
+				puts $debug_out(1) "$dir/${file}.db and $dir/sync/${file}.files are no longer required and may be deleted"
 			} else {
-				file delete $dir/${file}.db $dir/${file}.files
+				puts $debug_out(1) "$dir/${file}.db and $dir/${file}.files are no longer required and may be deleted"
 			}
 		}
 	}
@@ -3262,7 +3268,8 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 		puts $debug_out(2) "execute - called the start procedure"
 		# call start
 		start
-		if {$threads} {
+		# do not run the thread if aur_only is true
+		if {!$aur_only && $threads} {
 			puts $debug_out(2) "execute - restart (threads) called test_internet"
 			if {[test_internet] == 0} {
 				# and run the aur_versions thread to get the current aur_versions
@@ -4510,6 +4517,7 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 		set version [lindex $line 2]
 		set available [lindex $line 3]
 		set index [lsearch $aur_versions $name]
+		puts $debug_out(3) "get_aur_updates - check available versions for $name ($available), found at $index in aur_versions"
 		# if this is a local file with no aur version
 		if {$available == "-na-"} {
 			set messages [append messages "Warning: $name was not found in the AUR packages\n"]
@@ -4598,7 +4606,10 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 		# test for internet
 		puts $debug_out(2) "get_aur_versions - called test_internet"
 		set error [test_internet]
-		if {$error != 0 || $dlprog == ""} {return 1}
+		if {$error != 0 || $dlprog == ""} {
+			puts $debug_out(2) "get_aur_versions - test_internet returned $error, download programme set to \"$dlprog\", return error"
+			return 1
+		}
 		set list ""
 		set aur_versions ""
 		puts $debug_out(2) "get_aur_versions started ([expr [clock milliseconds] - $start_time])"
@@ -4641,6 +4652,7 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 		# split the result on each "\},\{"
 		set result [regsub -all "\},\{" $result "\n"]
 		set result [split $result "\n"]
+		puts $debug_out(3) "get_aur_versions - result is \"$result\""
 		# and analyse each line
 		foreach line $result {
 			set index [string first "\"Name\":" $line]
@@ -4707,6 +4719,7 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 				set keywords [string range $line $position [expr [string first \] $line $position] - 1]]
 				set keywords [string map {"\"" "" "," " "} $keywords]
 			}
+			puts $debug_out(3) "get_aur_versions - parsed result and found \"$name $version $description\""
 			lappend aur_versions [list $name $version $description]
 		}
 		puts $debug_out(1) "get_aur_versions found AUR package version details - ([expr [clock milliseconds] - $start_time])"	
@@ -5065,11 +5078,6 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 				} else {
 					puts $debug_out(2) "get_dataview - files did not find a file list"
 					.wp.wftwo.dataview.files insert end "Could not get the file list for $package.$detail\n"
-					# Check for pkgfile
-					if {[catch {exec which pkgfile}] != 0} {	
-						.wp.wftwo.dataview.files insert end "\n"			
-						.wp.wftwo.dataview.files insert end "Consider installing pkgfile and try again"
-					}
 				}
 			}
 			.wp.wftwo.dataview.check {
@@ -5112,6 +5120,43 @@ global debug_out
 	}
 	puts $debug_out(1) "get_file_mtime completed"
 	return $last
+}
+
+proc get_mirrorlist {} {
+	
+global debug_out dlprog tmp_dir
+# get the latest mirrorlist
+
+	puts $debug_out(1) "get_mirrorlist called"
+	
+	# backup any existing list just in case the download fails
+	if {[file exists "$tmp_dir/mirrorlist.latest"]} {
+		file rename -force "$tmp_dir/mirrorlist.latest" "$tmp_dir/mirrorlist.backup"
+	}
+
+	set error 1
+	puts $debug_out(2) "get_mirrorlist - called test_internet"
+	if {[test_internet] == 0} {
+		if {$dlprog == "curl"} {
+			set error [catch {exec curl -o "$tmp_dir/mirrorlist.latest" "https://archlinux.org/mirrorlist/all/"}]
+		} elseif {$dlprog == "wget"} {
+			set error [catch {exec wget -q -O "$tmp_dir/mirrorlist.latest" "https://archlinux.org/mirrorlist/all/"}]
+		}
+		if {$error != 0} {
+			puts $debug_out(2) "get_mirrorlist - failed to download mirrorlist"
+		}
+	}
+	# if the error is not 0 then either there was no internet or the download failed
+	# see what mirrorlist file is available, if any
+	if {[file exists "$tmp_dir/mirrorlist.latest"]} {
+		return 0
+	} elseif {[file exists "$tmp_dir/mirrorlist.backup"]} {
+		# use the previous "latest" file, the update time will be shown in the Update Mirrorlist process
+		file rename -force "$tmp_dir/mirrorlist.backup" "$tmp_dir/mirrorlist.latest"
+	} else {
+		return 1
+	}
+	
 }
 
 proc get_password {master} {
@@ -5536,6 +5581,7 @@ global debug_out list_local start_time tmp_dir
 			tk_messageBox -default ok -detail "The temporary sync database will need to be updated.\n\nConsider running a full system upgrade to avoid further errors." -icon info -message "There are new repositories detected." -parent . -title "Update Sync Database" -type ok
 			execute "sync"
 		}
+		set local ""
 	}
 	set local [split $local \n]
 	# now add the remaining fields, plus a placeholder for the available version and the description, for the item and add it to list_local
@@ -6042,7 +6088,7 @@ global debug_out mirror_countries su_cmd tmp_dir
 	
 		.update_mirrors.exclude_label configure -foreground blue -relief raised -text "Filtering the mirrors by status...."
 		update
-		set mirror_status [eval [concat exec curl -Lfs "https://www.archlinux.org/mirrors/status/json/"]]
+		set mirror_status [eval [concat exec curl -Lfs "https://archlinux.org/mirrors/status/json/"]]
 		
 		# first get the last_check time
 		set position [expr [string first "last_check" $mirror_status] + 14]
@@ -6078,7 +6124,7 @@ global debug_out mirror_countries su_cmd tmp_dir
 					set results [lappend results $result]
 				}
 			}
-			# the rating here is set according to the best results suggested at https://www.archlinux.org/mirrors/status/
+			# the rating here is set according to the best results suggested at https://archlinux.org/mirrors/status/
 			set rating "status_good"
 			# if the checks did not complete or the delay was more that 1 hour then the mirror may not be ideal
 			if {[lindex $results 2] != 1 || [lindex $results 1] > 1} {set rating "status_poor"}
@@ -6227,27 +6273,38 @@ global debug_out mirror_countries su_cmd tmp_dir
 
 proc mirrorlist_update {} {
 	
-global debug_out mirror_countries win_mainx win_mainy
+global debug_out mirror_countries tmp_dir win_mainx win_mainy
 # update and rank the mirrorlist
-# valid sources are /etc/pacman.d/mirrorlist.pacnew /etc/pacman.d/mirrorlist.backup
+# valid sources are /etc/pacman.d/mirrorlist.pacnew /etc/pacman.d/mirrorlist.backup 0r a downloaded update
+# requires rankmirrors
 
 	puts $debug_out(1) "mirrorlist_update called"
-	
+	if {[catch {exec which rankmirrors}] == 1} {
+		tk_messageBox -default ok -detail "Consider installing the pacman-contrib package" -icon info -message "Rankmirrors is required to update the mirrorlist" -parent . -title "Cannot Update Mirrorlist" -type ok
+		return 1
+	}
 	if {[file exists /etc/pacman.d/mirrorlist.pacnew]} {
 		set source /etc/pacman.d/mirrorlist.pacnew
+	# if no pacnew file exists then try to download the latest mirrorlist to the tmp directory and use that
+	} elseif {[get_mirrorlist] == 0} {
+		set source $tmp_dir/mirrorlist.latest
+	# if that does not work then use a backup file 
 	} elseif {[file exists /etc/pacman.d/mirrorlist.backup]} {
 		set source /etc/pacman.d/mirrorlist.backup
 	} else {
+		# if the only file is mirrorlist then offer to back it up and then rank it
 		tk_messageBox -default ok -detail "Update mirrorlist will use the file \"mirrorlist.pacnew\" or \"mirrorlist.backup\" in /etc to create a new, updated, pacman mirrorlist." -icon error -message "No pacman mirrorlist source file exists." -parent . -title "Error" -type ok
 		puts $debug_out(1) "mirrorlist_update - no backup or pacnew file to update, return error"
 		return 1
 	}
+	puts $debug_out(1) "mirrorlist_update - using mirrorlist $source" 
 	set fid [open $source r]
-	gets $fid line
-	while {[string first "## Generated on " $line] == -1} {
+	while {![eof $fid]} {
 		gets $fid line
+		if {[string first "## Generated on " $line] != -1} {break}
 	}
 	close $fid
+	puts $debug_out(2) "mirrotlist_update - generated on [string range $line 16 end]"
 	set generated [clock format [clock scan [string range $line 16 end] -format %Y-%m-%d] -format "[exec locale d_fmt]"]
 	
 	puts $debug_out(2) "mirrorlist_update -using $source updated $generated"
@@ -6257,11 +6314,12 @@ global debug_out mirror_countries win_mainx win_mainy
 	get_win_geometry
 	set left [expr $win_mainx + {[winfo width .] / 2} - {356/ 2}]
 	set down [expr $win_mainy + {[winfo height .] / 2} - {240 / 2}]
-	wm geometry .update_mirrors 356x240+$left+$down
+	wm geometry .update_mirrors +$left+$down
 	wm iconphoto .update_mirrors tools
 	wm protocol .update_mirrors WM_DELETE_WINDOW {
 		# assume cancel select, see button .update_mirrors.cancel
 		.update_mirrors.cancel invoke
+
 	}
 	wm resizable .update_mirrors 0 0
 	wm title .update_mirrors "Update/Rank Mirror List"
@@ -6508,103 +6566,106 @@ global aur_all aur_versions debug_out filter filter_list find group list_all lis
 # put the version and description found for a local package into list_all list_show list_local and treeview
 # this procedure is called by a thread
 	
-	puts $debug_out(1) "put_aur_versions - called ([expr [clock milliseconds] - $start_time])"
+	puts $debug_out(1) "put_aur_versions - called, thread is \"$thread\" ([expr [clock milliseconds] - $start_time])"
 	# and what if the thread was running but failed?	
 	if {$versions == "failed"} {
 		puts $debug_out(1) "put_aur_versions - aur_versions thread exited with failed state - call get_aur_versions"
 		set thread ""
 		set aur_versions ""
-		get_aur_versions	
-		return 1
+		get_aur_versions
+	} else {
+		set aur_versions $versions
 	}
-		
-	set aur_versions $versions
+	puts $debug_out(1) "put_aur_versions - aur_versions set to $aur_versions"
 	# reset the number of local files that need to be updated
 	set local_newer 0
 	# read each of the local packages and compare them to the information in aur_versions
 	# if the local package does not exist in aur_versions then leave it unchanged
-	foreach line $list_local {
-		set name [lindex $line 1]
-		set element ""
-		if {[lsearch -index 0 $aur_versions $name] != -1} {
-			set version [lindex $line 2]
-			set index [lsearch -index 0 $aur_versions $name]
-			set item [lindex $aur_versions $index]
-			set available [lindex $item 1]
-			set description [lindex $item 2]
-		} else {
-			set version [lindex $line 2]
-			set available [lindex $line 3]
-			set description [lindex $line 5]
-		}
-		# try to get the description from the local database
-		if {$description == "DESCRIPTION"} {
-			puts $debug_out(3) "put_aur_versions - find description for ${name}-${version} from local database"
-			set filename [glob $tmp_dir/local/${name}-${version}]
-			set fid [open $filename/desc r]
-			while {[eof $fid] == 0} {
-				gets $fid header
-				if {$header == "%DESC%"} {
-					gets $fid description
-					break
+	# test for no local packages
+	if {[llength $list_local] != 0} {
+		foreach line $list_local {
+				set name [lindex $line 1]
+				set element ""
+				if {[lsearch -index 0 $aur_versions $name] != -1} {
+					set version [lindex $line 2]
+					set index [lsearch -index 0 $aur_versions $name]
+					set item [lindex $aur_versions $index]
+					set available [lindex $item 1]
+					set description [lindex $item 2]
+				} else {
+					set version [lindex $line 2]
+					set available [lindex $line 3]
+					set description [lindex $line 5]
 				}
-			}
-			close $fid
-			puts $debug_out(3) "put_aur_versions - description for $name set to \"$description\""
-		}	
-		set is_update false
-		lappend element "local" "$name" "$version" "$available" "[lindex $line 4]" "$description"
-		# rewrite list_local into aur_updates
-		if {$element != ""} {lappend aur_updates $element}
-		# now insert the available version and the description into the lists
-		# find the index of the package in list_local_ids 
-		set index [lsearch -index 0 $list_local_ids $name]
-		# put the new element line into list_all (first index)
-		set list_all_index [lindex [lindex $list_local_ids $index] 1]
-		set list_all [lreplace $list_all $list_all_index $list_all_index $element]
-		# check if this is an update and calculate the number of updates available. If it is an update insert the correct tags as necessary.
-		if {[lrange $element 2 2] != [lrange $element 3 3]} {
-			puts $debug_out(3) "put_aur_versions - call test_versions for $name"
-			set test [test_versions [lrange $element 2 2] [lrange $element 3 3]]
-			puts $debug_out(3) "put_aur_versions - test_versions returned $test"
-			if {$test == "newer"} {
-				set is_update true
-				puts $debug_out(3) "put_aur_versions - this is an update"
-				incr local_newer
-			}
-		}
-		# if there are four items in the list_local_ids then the element is included in list_show and the treeview
-		if {[llength [lindex $list_local_ids $index]] == 4} {
-			# put the new element line into list_show (second index)
-			set list_show_index [lindex [lindex $list_local_ids $index] 2]
-			set list_show [lreplace $list_show $list_show_index $list_show_index $element]
-			# put $available into treeview at the fourth position (third index)
-			# $description is not shown in the treeview
-			set treeview_index [lindex [lindex $list_local_ids $index] 3]
-			set element [lreplace [.wp.wfone.listview item $treeview_index -values] 3 3 $available]
-			# now check if this would be an update and add the tags if necessary
-			# remove any existing tags
-			.wp.wfone.listview tag remove outdated $treeview_index
-			.wp.wfone.listview tag remove installed $treeview_index
-			# and add any new tags required
-			if {$is_update} {
+				# try to get the description from the local database
+				if {$description == "DESCRIPTION"} {
+					puts $debug_out(3) "put_aur_versions - find description for ${name}-${version} from local database"
+					set filename [glob $tmp_dir/local/${name}-${version}]
+					set fid [open $filename/desc r]
+					while {[eof $fid] == 0} {
+						gets $fid header
+						if {$header == "%DESC%"} {
+							gets $fid description
+							break
+						}
+					}
+					close $fid
+					puts $debug_out(3) "put_aur_versions - description for $name set to \"$description\""
+				}	
+				set is_update false
+				lappend element "local" "$name" "$version" "$available" "[lindex $line 4]" "$description"
+				# rewrite list_local into aur_updates
+				if {$element != ""} {lappend aur_updates $element}
+				# now insert the available version and the description into the lists
+				# find the index of the package in list_local_ids 
+				set index [lsearch -index 0 $list_local_ids $name]
+				# put the new element line into list_all (first index)
+				set list_all_index [lindex [lindex $list_local_ids $index] 1]
+				set list_all [lreplace $list_all $list_all_index $list_all_index $element]
+				# check if this is an update and calculate the number of updates available. If it is an update insert the correct tags as necessary.
+				if {[lrange $element 2 2] != [lrange $element 3 3]} {
+					puts $debug_out(3) "put_aur_versions - call test_versions for $name"
+					set test [test_versions [lrange $element 2 2] [lrange $element 3 3]]
+					puts $debug_out(3) "put_aur_versions - test_versions returned $test"
+					if {$test == "newer"} {
+						set is_update true
+						puts $debug_out(3) "put_aur_versions - this is an update"
+						incr local_newer
+					}
+				}
+				# if there are four items in the list_local_ids then the element is included in list_show and the treeview
+				if {[llength [lindex $list_local_ids $index]] == 4} {
+					# put the new element line into list_show (second index)
+					set list_show_index [lindex [lindex $list_local_ids $index] 2]
+					set list_show [lreplace $list_show $list_show_index $list_show_index $element]
+					# put $available into treeview at the fourth position (third index)
+					# $description is not shown in the treeview
+					set treeview_index [lindex [lindex $list_local_ids $index] 3]
+					set element [lreplace [.wp.wfone.listview item $treeview_index -values] 3 3 $available]
+					# now check if this would be an update and add the tags if necessary
+					# remove any existing tags
+					.wp.wfone.listview tag remove outdated $treeview_index
+					.wp.wfone.listview tag remove installed $treeview_index
+					# and add any new tags required
+					if {$is_update} {
 ### temporarily add an asterix to the new version number
 ###.wp.wfone.listview item $treeview_index -values [lreplace $element 3 3 "*[lrange $element 3 3]"]
 ###
-				.wp.wfone.listview tag add outdated $treeview_index
-			} else {
-				.wp.wfone.listview tag add installed $treeview_index
-			}	
-			.wp.wfone.listview item $treeview_index -values $element
-		}
-	}
-	set list_local $aur_updates
-	# list_local should now be a clean list of all the local packages
-	puts $debug_out(2) "put_aur_versions - filter is \"$filter\", group is \"$group\", find is \"$find\""
-	# if filter_list is still set to list_all at this point then update it
-	if {$filter == "all" && $group == "All" && $find == ""} {
-		set filter_list $list_all
-		puts $debug_out(2) "put_aur_versions - filter_list set to list_all"
+						.wp.wfone.listview tag add outdated $treeview_index
+					} else {
+						.wp.wfone.listview tag add installed $treeview_index
+					}	
+					.wp.wfone.listview item $treeview_index -values $element
+				}
+			}
+			set list_local $aur_updates
+			# list_local should now be a clean list of all the local packages
+			puts $debug_out(2) "put_aur_versions - filter is \"$filter\", group is \"$group\", find is \"$find\""
+			# if filter_list is still set to list_all at this point then update it
+			if {$filter == "all" && $group == "All" && $find == ""} {
+				set filter_list $list_all
+				puts $debug_out(2) "put_aur_versions - filter_list set to list_all"
+			}
 	}
 	# now show the number of packages against AUR/Local Updates
 	if {$aur_all == true} {
@@ -6842,9 +6903,9 @@ global browser debug_out dlprog home
 	if {[test_internet] != 0} {return 1}
 	puts $debug_out(2) "read_news - download arch rss"
 	if {$dlprog == "curl"} {
-		set error [catch {eval [concat exec curl -s https://www.archlinux.org/feeds/news/]} rss_news]
+		set error [catch {eval [concat exec curl -s https://archlinux.org/feeds/news/]} rss_news]
 	} elseif {$dlprog == "wget"} {
-		set error [catch {eval [concat exec wget -qO - https://www.archlinux.org/feeds/news/]} rss_news]
+		set error [catch {eval [concat exec wget -qO - https://archlinux.org/feeds/news/]} rss_news]
 	} else {
 		set error 1
 	}
@@ -7337,8 +7398,8 @@ global debug_out filter_list find findtype list_repos pacman_files_upgrade pkgfi
 					if {$su_cmd == "su -c"} {set command "$su_cmd \"pkgfile -u\""}
 				} else {
 					set action "Update pacman file databases"
-					set command "$su_cmd pacman -b $dir -Fy"
-					if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $dir -Fy\""}
+					set command "$su_cmd pacman -b $tmp_dir -Fy"
+					if {$su_cmd == "su -c"} {set command "$su_cmd \"pacman -b $tmp_dir -Fy\""}
 				}
 				set wait true
 				set error [execute_command $action $command $wait]
@@ -7389,9 +7450,9 @@ global debug_out is_connected start_time
 
 	puts $debug_out(1) "test_internet called - ([expr [clock milliseconds] - $start_time])"
 	set count 0
-	set try(0) "www.google.com"
-	set try(1) "www.yahoo.com"
-	set try(2) "www.bing.com"
+	set try(0) "google.com"
+	set try(1) "yahoo.com"
+	set try(2) "bing.com"
 	while {$count < 3} {
 		# bypass the ping dns lookup in case it takes too long
 		# uses IPv4 which should work for everyone
@@ -8880,12 +8941,12 @@ global debug_out home su_cmd tmp_dir
 		if {$su_cmd == "su -c"} {
 			puts $fid "echo \$password | $su_cmd \"systemctl daemon-reload\" >> $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 2; fi"
-			puts $fid "echo \$password | $su_cmd \"systemctl restart org.cups.cupsd\" >> $tmp_dir/errors 2>&1"
+			puts $fid "echo \$password | $su_cmd \"systemctl restart cups.service\" >> $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 3; fi"
 		} else {
 			puts $fid "echo \$password | $su_cmd -S -p \"\" systemctl daemon-reload >> $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 2; fi"
-			puts $fid "echo \$password | $su_cmd -S -p \"\" systemctl restart org.cups.cupsd >> $tmp_dir/errors 2>&1"
+			puts $fid "echo \$password | $su_cmd -S -p \"\" systemctl restart cups.service >> $tmp_dir/errors 2>&1"
 			puts $fid "if \[ \$? -ne 0 \]; then exit 3; fi"
 		}
 		close $fid
@@ -8945,7 +9006,7 @@ global debug_out home su_cmd tmp_dir
 		puts $debug_out(2) "update_cups - reloading daemons"
 		catch {exec $su_cmd systemctl daemon-reload}
 		puts $debug_out(2) "update_cups - restart cups"
-		set error [catch {eval [concat exec $su_cmd systemctl restart org.cups.cupsd]} error_message]
+		set error [catch {eval [concat exec $su_cmd systemctl restart cups.service]} error_message]
 		if {$error != 0} {
 			puts $debug_out(1) "update_cups - error while restarting cups: $error_message"
 			tk_messageBox -default ok -detail "$error_message" -icon error -message "Error while restarting cups" -parent . -title "Update Cups" -type ok  
@@ -9405,7 +9466,7 @@ frame .buttonbar
 				filter
 			}
 			# and change the entry widget from entry_find to entry_findfile
-			balloon_set .buttonbar.entry_findfile "Find the package which owns a file\n(enter the full path to the file name)" 
+			balloon_set .buttonbar.entry_findfile "Find the package which owns a file" 
 			grid remove .buttonbar.entry_find
 			grid .buttonbar.entry_findfile -in .buttonbar -row 1 -column 9 \
 				-sticky we
@@ -9664,7 +9725,7 @@ frame .buttonbar
 					if {$error == 3} {return 1}
 				}
 				# continue with the existing databases
-				set command "pacman -b $tmp_dir -Foq $findfile"					
+				set command "pacman -b $tmp_dir -Fq $findfile"
 			}
 			# OK, so we know the command to execute, so do it
 			puts $debug_out(2) "findfile - find command set to \"$command\""
@@ -9740,12 +9801,6 @@ frame .buttonbar
 				}
 				.wp.wftwo.dataview.info insert end "Click on the folder icon to update the files data.\n"			
 			}
-			if {[string first "pacman" $command] == 0 && [file dirname $findfile]  == "."} {
-				.wp.wftwo.dataview select .wp.wftwo.dataview.info
-				update
-				.wp.wftwo.dataview.info insert end "\n"	
-				.wp.wftwo.dataview.info insert end "Pacman requires a full path name to locate a file\n"			
-			}	
 			if {$command == ""} {
 				.wp.wftwo.dataview select .wp.wftwo.dataview.info
 				update
@@ -9895,7 +9950,7 @@ frame .filters
 		
 	checkbutton .filter_list_aur_updates \
 		-command {
-			puts $debug_out(3) ".filter_list_aur_updates - called with $thread"
+			puts $debug_out(3) ".filter_list_aur_updates - called with thread \"$thread\""
 			# do not execute until the thread has completed
 			if {$thread != ""} {
 				puts $debug_out(3) ".filter_list_aur_updates - aur_versions thread is $thread"
@@ -11631,3 +11686,4 @@ if {$threads} {
 }
 # test the current configuration options
 test_configs
+puts $debug_out(1) "START - completed -([expr [clock milliseconds] - $start_time])"
