@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.5"
+set version "1.4.6"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -171,7 +171,7 @@ global config_file
 # ..configurable
 global backup_dir browser buttons editor geometry geometry_view helpbg helpfg icon_dir installed_colour keep_log outdated_colour save_geometry show_menu show_buttonbar terminal terminal_string
 # ..variables
-global about_text after_id anchor args aur_all aur_files aur_installs aur_list aur_messages aur_only aur_updates aur_versions backup_log bubble clock_id colours count_all count_installed count_outdated count_uninstalled dataview dbpath depends_searches diffprog dlprog filter filter_list find findfile find_message findtype fs_upgrade geometry_config group group_index help_text index installed_colour is_connected known_browsers known_diffprogs known_editors known_terminals list_all list_groups list_installed list_local list_local_ids list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order local_newer message mirror_countries one_time outdated_colour package_actions pacman_files_upgrade part_upgrade pkgfile_upgrade repo_delete_msg select selected_list selected_message start_time state su_cmd sync_time system_test thread threads times tv_index tv_select tverr_message tverr_text upgrade_time upgrades upgrades_count version win_configx win_configy win_mainx win_mainy
+global about_text after_id anchor args aur_all aur_files aur_installs aur_list aur_messages aur_only aur_updates aur_versions backup_log bubble clock_id colours count_all count_installed count_outdated count_uninstalled dataview dbpath depends_searches diffprog dlprog filter filter_list find findfile find_message findtype fs_upgrade geometry_config group group_index help_text index installed_colour is_connected known_browsers known_diffprogs known_editors known_terminals list_all list_groups list_installed list_local list_local_ids list_outdated list_repos list_show list_show_ids list_show_order list_uninstalled listfirst listlast listview_current listview_last_selected listview_selected listview_selected_in_order local_newer message mirror_countries one_time outdated_colour package_actions pacman_files_upgrade part_upgrade pkgfile_upgrade repo_delete_msg select selected_list selected_message start_time state su_cmd sync_time system_data system_test thread threads times tv_index tv_select tverr_message tverr_text upgrade_time upgrades upgrades_count version win_configx win_configy win_mainx win_mainy
 
 # VARIABLES
 
@@ -191,16 +191,23 @@ if [string equal $program_dir "."] {
 # the location of the icon directory is preserved in the configuration file
 set icon_dir "/usr/share/pixmaps/vpacman"
 
-# we may need a temporary directory with more space thatn /tmp for aur_upgrades
+# we may need a temporary directory with more space than /tmp for aur_upgrades
 # make the temporary directory if it does not already exist
-# if there is a tmp directory in the users home dirctory use that
-if {[file isdirectory $home/tmp]} {
-	file mkdir "$home/tmp/vpacman"
-	set tmp_dir "$home/tmp/vpacman"
-} else {
-# if not then create a hidden tmp directory in the home directory and use that
-	file mkdir "$home/.tmp/vpacman"
+# first check if the tmp directory exists before creating a new directory
+if {[file isdirectory $home/.tmp/vpacman]} {
 	set tmp_dir "$home/.tmp/vpacman"
+} elseif {[file isdirectory $home/.tmp/vpacman]} {
+	set tmp_dir "$home/.tmp/vpacman"
+} else {
+	# if there is a tmp directory in the users home dirctory use that
+	if {[file isdirectory $home/tmp]} {
+		file mkdir "$home/tmp/vpacman"
+		set tmp_dir "$home/tmp/vpacman"
+	} else {
+	# if not then create a hidden tmp directory in the home directory and use that
+		file mkdir "$home/.tmp/vpacman"
+		set tmp_dir "$home/.tmp/vpacman"
+	   }
 }
 
 # set other variables
@@ -375,6 +382,7 @@ The main window consists of a menu bar, a toolbar, a set of filter and list opti
 	View:	<lm3>Latest News > Read the last year of news from archlinux.org</lm3> 
 			<lm3>Pacman Configuration > View the the pacman configuration file.</lm3> 
 			<lm3>Recent Pacman Log > View the pacman log file.</lm3> 
+			<lm3>Dependency Updates > View a report of the dependencies which will be updated in the next Full System Upgrade.</lm3> 
 			<lm3>Hide Menubar > Hide the menu bar. Can be shown again using the right click menu in the Packages Window - see below.</lm3> 
 			<lm3>Hide/Show Toolbar > Hide or show the tool bar</lm3> 
 	Help:	<lm3>Help > This help message.</lm3>
@@ -429,7 +437,7 @@ set known_diffprogs "diffuse kompare kdiff3 meld  vimdiff"
 # list of known_editors
 set known_editors [list emacs nano vi vim]
 # list of known terminals
-set known_terminals [list {gnome-terminal} {--title <title> -- <command>} {konsole} {--title <title> -e <command>} {lxterminal} {--title <title> -e <command>} {mate-terminal} {--title <title> -e <command>} {qterminal} {-title <title> -e <command>} {roxterm} {--title <title> -e <command>} {vte} {--name <title> --command <command>} {xfce4-terminal} {--title <title> -e <command>} {xterm} {-title <title> -e <command>}]
+set known_terminals [list {gnome-terminal} {--title <title> -- <command>} {konsole} {--title <title> -e <command>} {lxterminal} {--title <title> -e <command>} {mate-terminal} {--title <title> -e <command>} {qterminal} {--title <title> --execute <command>} {roxterm} {--title <title> -e <command>} {vte} {--name <title> --command <command>} {xfce4-terminal} {--title <title> -e <command>} {xterm} {-title <title> -e <command>}]
 # the list of all the packages in the database, including locally installed packages in the form
 # Repo Package Version Available Group(s) Description
 set list_all ""
@@ -455,10 +463,10 @@ set list_show ""
 # the same list but in the form
 #id
 set list_show_ids ""
-# the order that the list_show is sorted into in the form
+# the order that the list_show is sorted into
 set list_show_order "Package increasing"
 # the list of packages which have not been installed in the form
-# Repo Package Version Available Group(s) Descrition
+# Repo Package Version Available Group(s) Description
 set list_uninstalled ""
 # the first item selected - used for the alternative treeview bindings
 set listfirst ""
@@ -476,10 +484,9 @@ set listview_selected ""
 # the list of all the currently selected items in listview, in the order selected, in the form
 # id
 set listview_selected_in_order ""
-# the list of all the currently selected items in listview in the order that they were selected in the form
-# id
-set local_newer 0
 # the number of newer AUR/Local packages identified to be upgraded
+set local_newer 0
+# an index
 set index 0
 # message to be shown in the button bar near the top of the window
 set message ""
@@ -515,6 +522,8 @@ set state ""
 set su_cmd "su -c"
 # the time of the last sync in clock seconds
 set sync_time 0
+# the system data (sync)
+set system ""
 # the result of the last test system
 set system_test "stable"
 # default terminal
@@ -664,6 +673,8 @@ puts $debug_out(1) "Version $version: User is $env(USER) - Home is $home - Confi
 #	Get a password whenever needed.
 # proc get_sync_time
 #	Get the last sync time, the list of repositories and check that the temporary database is up to date.
+# proc get_system_data
+# 	Get the system data (sync)
 # proc get_terminal
 #	If no terminal is configured or found in the known_terminals list, try to get a valid terminal and terminal_string
 # proc get_terminal_string {terminal}
@@ -709,6 +720,12 @@ puts $debug_out(1) "Version $version: User is $env(USER) - Home is $home - Confi
 #	Read the information from downloaded AUR package details
 # proc read_config
 #	Read the pacman configuration file and display it. 
+# proc read_dependencies (params)
+#	Check package upgrades available for changes in dependencies, and make a report if requested
+# proc read_dependencies_extra 
+#	Check for any extra packages required by added dependencies on an upgrade
+# proc read_dependencies_provides 
+#	Check for any dependencies that are provided by another package and which are required by added dependencies on an upgrade
 # proc read_help
 # 	Display the help text
 # proc read_log
@@ -819,7 +836,7 @@ global debug_out listview_selected part_upgrade select tv_select
 
 proc aur_install {} {
 
-global debug_out depends_searches list_local win_mainx win_mainy
+global debug_out depends_searches home list_local win_mainx win_mainy
 
 # open a window to ask for a AUR package name to install or browse for a local package
 # if there are no other aur dependencies required, either to run, make or check, then install it
@@ -834,7 +851,7 @@ global debug_out depends_searches list_local win_mainx win_mainy
 	get_win_geometry
 	set left [expr $win_mainx + {[winfo width .] / 2} - {360 / 2}]
 	set down [expr $win_mainy + {[winfo height .] / 2} - {170 / 2}]
-	wm geometry .aurinstall 360x170+$left+$down
+	wm geometry .aurinstall 360x175+$left+$down
 	wm iconphoto .aurinstall tools
 	wm protocol .aurinstall WM_DELETE_WINDOW {
 		# assume cancel aur install, see button .aurinstall.cancel
@@ -1013,11 +1030,13 @@ global debug_out depends_searches list_local win_mainx win_mainy
 									if {$basename == ""} {
 										puts $debug_out(3) "aur_install - $item does not exist in AUR so pass it on to be queried in aur_install_depends"
 										set basename $item
-									} else {
+									} elseif {$basename != $item} {
+										set ans [tk_messageBox -default ok -detail "The package $item is a dependency of $package, but $item is a part of $basename. Substituting $basename for $item in the list of dependencies" -icon info -message "The package \"$item\" is a part of \"$basename\"" -parent . -title "Dependency found" -type ok]
 										puts $debug_out(3) "aur_install - basename of dependency $item is $basename"
 									}
 									# do not add duplicate items or the original package name
 									if {[lsearch -exact $new_installs $basename] == -1 && $basename != $package} {
+										puts $debug_out(3) "aur_install - add $basename to install list \"$new_installs\""
 										lappend new_installs $basename
 									}
 									puts $debug_out(3) "aur_install - set revised installs list to $new_installs"
@@ -1040,13 +1059,97 @@ global debug_out depends_searches list_local win_mainx win_mainy
 					}
 				}
 			} \
-			-text "Install"
+			-text "Install" \
+			-width 8
+
+		button .aurinstall.download \
+			-command {
+				# get_aur_list will test the internet connection
+				if {[.aurinstall.package cget -text] != ""} {
+					# check that the package exists
+					# try to download an up-to-date packages list
+					# the packages list is updated frequently so always get a new file if possible
+					set result [get_aur_list]
+					if {$result == 1} {
+						puts $debug_out(2) "aur_install - cannot download new package list and there is no existing package available"
+						set ans [tk_messageBox -default ok -detail "Could not download the AUR package list.\nNo previous AUR package list is available.\nCannot continue" -icon error -message "Failed to download AUR package list" -parent .aurinstall -title "Error" -type ok]
+					} elseif {$result == 2} {
+						puts $debug_out(2) "aur_install - cannot download new package list and do not use the package list available"
+					} else {
+						set package [.aurinstall.package cget -text]
+						puts $debug_out(1) "aur_install - download $package"
+						set error [lsearch $aur_list $package]
+						if {$error == -1} {
+							puts $debug_out(3) "aur_install_depends - \"$package\" was not found in aur_list"
+							# $item does not exist in the AUR
+							tk_messageBox -default ok -detail "The package \"$package\" was not found in AUR" -icon error -message "Cannot download \"$package\"" -parent . -title "Download Error" -type ok
+						} else {
+							# test that the basename is the same as the package name
+							set info [get_aur_info $package]
+							set basename [lindex $info 0]
+							if {$basename != $package} {
+								puts $debug_out(2) "aur_install- $package has a basename of $basename"
+								tk_messageBox -default ok -icon question -message "The package \"$package\" is a part of \"$basename\"" -parent . -title "Download $package" -type ok
+								set package $basename
+							}
+							# find a download directory
+							set dl_dir ""
+							set xdg_dir ""
+							if {[file exists "$home/.config/user-dirs.dirs"]} {
+								set xdg_dir "not set"
+								puts $debug_out(2) "aur_install - download directory set to XDG folder"
+								set fid [open "$home/.config/user-dirs.dirs" r]
+								set user_dirs [read $fid]
+								close $fid
+								set user_dirs [lsearch -inline -glob [split $user_dirs \n] "XDG_DOWNLOAD_DIR=*"]
+								set dl_dir [string range $user_dirs [string first \" $user_dirs] end]
+								if {[string first "HOME" $dl_dir] == 2} {set dl_dir $home/[string range $dl_dir 7 end-1]}
+								puts $debug_out(2) "aur_install - XDG download directory is \"$dl_dir\""
+							}
+							if {$dl_dir == ""} {
+								set dl_dir $home
+							} else {
+								set xdg_dir "set"
+							}
+							# download the file
+							if {[file exists "$dl_dir/$package.tar.gz"]} {
+								puts $debug_out(2) "aur_install - \"$dl_dir/$package.tar.gz\" exists - delete it"
+								set error [catch {file delete "$dl_dir/$package.tar.gz"} result]
+								if {$error != 0} {puts $debug_out(2) "aur_install - \tfailed with error $error  and result \"$result\""}
+							}
+							if {$dlprog == "curl"} {
+								puts $debug_out(2) "aur_install - download file using \"curl -s -o \"$dl_dir/$package.tar.gz\" -L \"https://aur.archlinux.org/cgit/aur.git/snapshot/$package.tar.gz\""
+								set error [catch {exec curl -s -o "$dl_dir/$package.tar.gz" -L "https://aur.archlinux.org/cgit/aur.git/snapshot/$package.tar.gz"} result]
+								
+							} else {
+								puts $debug_out(2) "aur_install - download file using \"wget -P \"$dl_dir\" -Lq \"https://aur.archlinux.org/cgit/aur.git/snapshot/$package.tar.gz\"\""
+								exec wget -P "$dl_dir" -Lq "https://aur.archlinux.org/cgit/aur.git/snapshot/$package.tar.gz"
+							}
+							puts $debug_out(2) "aur_install - downloaded file with error $error and result \"$result\""
+							# what were the results
+							set detail ""
+							if {$xdg_dir == ""} {
+								set detail "Because no XDG user directories have been set\n"
+							} elseif {$xdg_dir == "not set"} {
+								set detail "Because no download directory has been set in the XDG user directories\n"
+							}
+							set detail [string trim [concat $detail "$package.tar.gz has been downloaded to \"$dl_dir\""]]
+							set ans [tk_messageBox -default ok -detail $detail -icon info -message "The snapshot file for $package has been downloaded" -parent .aurinstall -title "Download complete" -type ok]
+							destroy .aurinstall
+						}
+					}
+				}
+			} \
+			-text "Download" \
+			-width 8
+
 		button .aurinstall.cancel \
 			-command {
 				grab release .aurinstall
 				destroy .aurinstall
 			} \
-			-text "Cancel"
+			-text "Cancel" \
+			-width 8
 
 	# Geometry management
 
@@ -1055,19 +1158,21 @@ global debug_out depends_searches list_local win_mainx win_mainy
 	grid .aurinstall.packagename -in .aurinstall -row 2 -column 4 \
 		-sticky e
 	grid .aurinstall.info -in .aurinstall -row 2 -column 5 -padx 2
-	grid .aurinstall.browse_label -in .aurinstall -row 3 -column 2 \
-		-columnspan 4 \
+	grid .aurinstall.browse_label -in .aurinstall -row 3 -column 1 \
+		-columnspan 5 \
 		-sticky we
-	grid .aurinstall.browse -in .aurinstall -row 4 -column 2 \
-		-columnspan 4 
+	grid .aurinstall.browse -in .aurinstall -row 4 -column 1 \
+		-columnspan 5 \
+		-sticky n
 	grid .aurinstall.buttons -in .aurinstall -row 5 -column 1 \
 		-columnspan 5 \
 		-sticky we
-	grid .aurinstall.install -in .aurinstall.buttons -row 1 -column 1 \
-		-sticky w
-	grid .aurinstall.cancel -in .aurinstall.buttons -row 1 -column 2 \
-		-sticky e
-		
+		grid .aurinstall.install -in .aurinstall.buttons -row 1 -column 1 \
+			-sticky w
+		grid .aurinstall.download -in .aurinstall.buttons -row 1 -column 2 
+		grid .aurinstall.cancel -in .aurinstall.buttons -row 1 -column 3 \
+			-sticky e
+			
 	# Resize behavior management
 
 	grid rowconfigure .aurinstall 1 -weight 0 -minsize 30 -pad 0
@@ -1086,12 +1191,14 @@ global debug_out depends_searches list_local win_mainx win_mainy
 	grid rowconfigure .aurinstall.buttons 1 -weight 0 -minsize 0 -pad 0
 	grid columnconfigure .aurinstall.buttons 1 -weight 1 -minsize 0 -pad 0
 	grid columnconfigure .aurinstall.buttons 2 -weight 1 -minsize 0 -pad 0
+	grid columnconfigure .aurinstall.buttons 3 -weight 1 -minsize 0 -pad 0
 	
 	balloon_set .aurinstall.packagename_label "The name of an AUR package to install"
 	balloon_set .aurinstall.packagename "The name of an AUR package to install"
 	balloon_set .aurinstall.browse "Browse to a local file to install"
 	balloon_set .aurinstall.info "Get more information about the package"
 	balloon_set .aurinstall.install "Install the package now"
+	balloon_set .aurinstall.download "Only download the package"
 	balloon_set .aurinstall.cancel "Cancel - do not install any package"
 
 	update
@@ -1102,12 +1209,12 @@ global debug_out depends_searches list_local win_mainx win_mainy
 
 proc aur_install_depends {package installs} {
 	
-global aur_list debug_out
+global aur_list debug_out su_cmd tmp_dir
 # install each of the aur dependencies listed
 
 	puts $debug_out(1) "aur_install_depends called for package \"$package\" and installs \"$installs\""
 	set index [lsearch $installs $package]
-	set ans [tk_messageBox -default yes -detail "Do you want to try to install the dependencies ([lrange $installs 0 $index-1]) before $package?" -icon question -message "There are dependencies from the AUR to install" -parent . -title "Install $package" -type yesno]
+	set ans [tk_messageBox -default yes -detail "Do you want to try to install the AUR dependencies ([lrange $installs 0 $index-1]) before $package?" -icon question -message "There are dependencies from the AUR to install" -parent . -title "Install $package" -type yesno]
 	if {$ans == "yes"} {
 	# first pass, check that the aur packages exist
 		set no_depends false
@@ -1127,22 +1234,48 @@ global aur_list debug_out
 			if {$error == -1} {
 				puts $debug_out(3) "aur_install_depends - \"$item\" was not found in aur_list"
 				# $item does not exist in the AUR
-				lappend error_list $item
-				puts $debug_out(3) "aur_install_depends - error_list is now $error_list"
-			}
-			# if the basename is different then replace item with basename in installs list
-			puts $debug_out(3) "aur_install_depends - get the info for $item"
-			set info [get_aur_info $item]
-			if {$info == 1} {return 1}
+				puts $debug_out(3) "aur_install_depends - check whether \"$item\" is already installed as 'provides'"
+				# now find the name of the package(s) which provide the item
+				set result [read_dependencies_provides $item]
+				set provides [lindex $result 0]
+				set installed [lindex $result 1]
+				if {$installed != ""} {
+					puts $debug_out(3) "aur_install_depends - an installed package already provides $item"
+					continue
+				} elseif {$provides == ""} {
+					lappend error_list $item
+					puts $debug_out(3) "aur_install_depends - cannot find what provides $item - error_list is now $error_list"
+				} else {
+					if {[llength $provides] == 1} {
+						puts $debug_out(3) "aur_install_depends - $provides from sync will be installed and provides $item"
+					} else {
+						puts $debug_out(3) "aur_install_depends - one of \"$provides\" from sync will provide $item when installed"
+					}
+				}
+					# either we found the item in a system package which will be installed automatically, or we did not and an error will be flagged
+					continue
+			} else {
+				puts $debug_out(3) "aur_install_depends - \"$item\" exists in aur_list"
+				# $item exists in aur_list
 
-			set basename [split [lindex $info 0] " "]
-			if {$basename == ""} {set basename $item} else {set item $basename}
-			puts $debug_out(3) "aur_install_depends - package set to $basename"
-			# if for any reason the basename is the same as the package name then do not process it
-			if {$basename == $package} {
-				puts $debug_out(3) "aur_install_depends - this is the same package as the item to install, do not process it"
-				continue
+				# if the basename is different then replace item with basename in installs list
+				puts $debug_out(3) "aur_install_depends - get the info for $item"
+				set info [get_aur_info $item]
+				if {$info == 1} {
+					# no info for $item
+					return 1
+				}
+				set basename [split [lindex $info 0] " "]
+				if {$basename == ""} {set basename $item} else {set item $basename}
+				puts $debug_out(3) "aur_install_depends - package set to $basename"
+				# if for any reason the basename is the same as the package name then do not process it
+				if {$basename == $package} {
+					puts $debug_out(3) "aur_install_depends - this is the same package as the item to install, do not process it"
+					continue
+				}
 			}
+			
+			
 			puts $debug_out(3) "aur_install_depends - check for duplicates of \"$item\" in \"$new_installs\""
 			set index [lsearch -exact $new_installs $item]
 			if {$index != -1} {
@@ -1158,7 +1291,8 @@ global aur_list debug_out
 		# add back the rest of the install list
 		set installs [concat $new_installs [lrange $installs $index end]]
 		puts $debug_out(2) "aur_install_depends - test basenames complete and installs list is now \"$installs\""
-		if {$error_list != ""} {
+		puts $debug_out(2) "\t and error list is \"$error_list\""
+		if {$error_list != ""} {				
 			puts $debug_out(2) "aur_install_depends - cannot install \"$error_list\""
 			set ans [tk_messageBox -default no -detail "The following dependencies:   ${error_list}\n\n      could not be installed from here.\n\nDo you want to try to continue anyway? This may not succeed,\n\nHint: Check the list of dependencies for $package (Tools > Install AUR/Local > \"$package\" > Info) and check the AUR page (AUR:) for the package." -icon error -message "Unable to find dependencies in the AUR package list" -parent . -title "Cannot install $package dependencies" -type yesno]
 			if {$ans == "yes"} {
@@ -1171,6 +1305,8 @@ global aur_list debug_out
 				}
 				puts $debug_out(2) "aur_install_depends - install list is now \"$installs\""
 				set no_depends true
+			} else {
+				return 1
 			}
 		}
 		
@@ -1297,6 +1433,8 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 	
 	# check for a lock file
 	if {[file exists "/var/lib/pacman/db.lck"]} {
+		# silently copy the lock file to the clipboard
+		clipboard append "/var/lib/pacman/db.lck"
 		tk_messageBox -message "Unable to lock database" -detail "If you're sure a package manager is not already\nrunning, you can remove /var/lib/pacman/db.lck" -icon error -title "Sync - Update Failed" -type ok
 		return 1
 	}
@@ -1371,9 +1509,12 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 			puts $debug_out(2) "aur_upgrade - test_versions returned $result"
 			switch $result {
 				same {
-					puts $debug_out(2) "\tand is up to date (indate)"
+					puts $debug_out(2) "\tand is up to date (indate) - ask if it should be reinstalled"
 					set ans [tk_messageBox -default no -detail "Do you want to reinstall $package?" -icon question -message "The package \"$package\" is already up to date" -parent . -title "Reinstall $package" -type yesno]
-					if {$ans == "cancel"} {return 1}
+					if {$ans == "no"} {
+						puts $debug_out(2) "aur_upgrade - cancelled"
+						return 1
+					}
 					set vstate "indate"
 				}
 				newer {
@@ -1417,7 +1558,7 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 				puts $debug_out(2) "aur_upgrade - $package is a local package to install"
 			} elseif {$basename != $package} {
 				puts $debug_out(2) "aur_upgrade - $package has a basename of $basename"
-				set ans [tk_messageBox -default ok -detail "Do you want to install $basename?" -icon question -message "The package \"$package\" is a part of \"$basename\"" -parent . -title "Install $package" -type okcancel]
+				set ans [tk_messageBox -default ok -detail "Do you want to install $basename?" -icon question -message "The package \"$package\" is a part of \"$basename\"" -parent . -title "Install $package (1)" -type okcancel]
 				if {$ans == "cancel"} {return 1}
 				set package $basename
 			}
@@ -1443,7 +1584,7 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 				# now check if basename is not the same as the package name
 				if {$basename != $package} {
 					puts $debug_out(2) "aur_upgrade - $package has a basename of $basename"
-					set ans [tk_messageBox -default ok -detail "Do you want to install $basename?" -icon question -message "The package \"$package\" is a part of \"$basename\"" -parent . -title "Install $package" -type okcancel]
+					set ans [tk_messageBox -default ok -detail "Do you want to install $basename?" -icon question -message "The package \"$package\" is a part of \"$basename\"" -parent . -title "Install $package (2)" -type okcancel]
 					if {$ans == "cancel"} {return 1}
 					set package $basename
 				}
@@ -1495,7 +1636,7 @@ global aur_versions aur_versions_TID debug debug_out dlprog editor geometry list
 	
 	# if the type is not "upgrade" and this is a straight "install" then do not ask for confirmation, any false options have already been disallowed
 	# or if this is a downgrade then do not ask for confirmation
-	if {($type != "upgrade" && $title != "install") || $title == "downgrade"} {
+	if {($type != "upgrade" && $title != "install" && $title != "reinstall" ) || $title == "downgrade"} {
 		set tk_message "Do you want to $title \"$package\"?"
 		if {$title == "downgrade"} {set detail [concat $detail " and is newer"]}
 		set ans [tk_messageBox -default yes -detail $detail -icon info -message $tk_message -parent . -title "[string totitle $title] \"$package\"" -type yesno]
@@ -2530,7 +2671,6 @@ global backup_dir browser buttons config_file debug_out diffprog editor geometry
 	# and save all the values in case we need to reverse them later
 	set old_values ""
 	lappend old_values $buttons $browser $diffprog $editor $geometry $geometry_config $save_geometry $terminal $terminal_string $installed_colour $outdated_colour $icon_dir $keep_log
-	set new_terminal $terminal
 	
 	# get the possible terminal values
 	set count 0
@@ -2544,7 +2684,7 @@ global backup_dir browser buttons config_file debug_out diffprog editor geometry
 	}
 	puts $debug_out(2) "configure - Known terminals $tlist1"
 	puts $debug_out(2) "configure - Known terminal strings $tlist2"
-	puts $debug_out(2) "configure - Current terminal is $terminal - new terminal is $new_terminal"
+	puts $debug_out(2) "configure - Current terminal is $terminal - current terminal string is $terminal_string"
 
 # CONFIGURE OPTIONS WINDOW
 
@@ -2569,7 +2709,7 @@ global backup_dir browser buttons config_file debug_out diffprog editor geometry
 		-textvariable save_geometry \
 		-width 3
 	# now set up a binding to toggle the value of the save_geometry variable
-	bind .config.yes_no <ButtonRelease-1> {
+				bind .config.yes_no <ButtonRelease-1> {
 		if {[string tolower $save_geometry] == "yes"} {
 			set save_geometry "no"
 		} else {
@@ -2602,12 +2742,18 @@ global backup_dir browser buttons config_file debug_out diffprog editor geometry
 		-values $tlist1 
 	# and set up bindings for when the value of the combobox changes
 	bind .config.terminal <Return> {
+		# don't get the terminal string if it already exists
+		if {[string first $terminal $terminal_string] == 0} {break}
 		set terminal_string [get_terminal_string $terminal]
 	}
 	bind .config.terminal <FocusOut> {
+		# don't get the terminal string if it already exists
+		if {[string first $terminal $terminal_string] == 0} {break}
 		set terminal_string [get_terminal_string $terminal]
 	}
 	bind .config.terminal <<ComboboxSelected>> {
+		# don't get the terminal string if it already exists
+		if {[string first $terminal $terminal_string] == 0} {break}
 		set terminal_string [get_terminal_string $terminal]
 	}
 	label .config.terminal_string_label \
@@ -2693,6 +2839,7 @@ global backup_dir browser buttons config_file debug_out diffprog editor geometry
 				if {$terminal == ""} {set detail "No terminal is installed"} else {set detail "\"$terminal\" is not installed"}
 				tk_messageBox -default ok -detail "$detail" -icon warning -message "Choose a different terminal" -parent . -title "Incorrect Option" -type ok 
 				focus .config.terminal
+				.config.terminal icursor 0
 				set tests 1
 			}
 			if {$terminal != ""} {
@@ -3024,11 +3171,11 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 		set lck_dir $dbpath
 		if {$type == "sync"} {set lck_dir ${tmp_dir}/}
 		if {[file exists ${lck_dir}db.lck]} {
-			tk_messageBox -message "Unable to lock database" -detail "If you're sure a package manager is not already\nrunning, you can remove ${lck_dir}db.lck" -icon error -title "Sync - Update Failed" -type ok
 			# silently copy the lock file to the clipboard
 			clipboard append ${lck_dir}db.lck
+			tk_messageBox -message "Unable to lock database" -detail "If you're sure a package manager is not already\nrunning, you can remove ${lck_dir}db.lck" -icon error -title "Sync - Update Failed" -type ok
 			return 1
-		# language - this error is restricted to English but we can ignire it at present.
+		# language - this error is restricted to English but we can ignore it at present.
 		# the error was reported in the terminal, the message only shows one solution
 		} elseif {[string first "error: target not found:" $errorinfo] != -1} {
 			# cannot get "target not found" if the database is locked, so use if elseif to check if database is locked first
@@ -3368,7 +3515,7 @@ global clock_id debug_out su_cmd terminal_string tmp_dir
 	# stop the exit button working while the terminal is opened
 	set_wmdel_protocol noexit
 	update idletasks
-	puts $debug_out(2) "execute_command - now execute $tmp_dir/vpacman.sh"
+	puts $debug_out(2) "execute_command - now run [concat exec $execute_string &]"
 	eval [concat exec $execute_string &]
 	# wait for the terminal to open
 	execute_terminal_isopen $action
@@ -3742,6 +3889,24 @@ global debug_out list_installed list_outdated start_time
 			puts $debug_out(1) "find_pacman_config - returned $dlprog - ([expr [clock milliseconds] - $start_time])"
 			return $dlprog
 		}
+		downloads {
+			set result false
+			# find the last entry for ParallelDownloads defined in /etc/pacman.conf
+			set fid [open "/etc/pacman.conf" r]
+			while {[eof $fid] == 0} {
+				gets $fid line
+				if {[string first "ParallelDownloads" $line] != -1} {
+					puts $debug_out(1) "find_pacman_config - found ParallelDownloads in $line"
+					# make sure that there are no blank spaces at the start of the line
+					if {[string first "ParallelDownloads" [string trim $line]] == 0} {
+						set result true
+					}
+				}
+			}
+			close $fid
+			puts $debug_out(1) "find_pacman_config - returned ParallelDownloads $result - ([expr [clock milliseconds] - $start_time])"
+			return $result
+		}
 		ignored -
 		all_ignored {
 			set ignored_list ""
@@ -3808,9 +3973,9 @@ global debug_out list_installed list_outdated start_time
 
 proc get_aur_dependencies {package} {
 	
-global debug_out depends_searches list_all list_installed list_local
+global debug_out depends_searches list_all list_installed list_local tmp_dir
 # get the dependencies required for a specified AUR package
-# returns a list of dependencies or "none" meaning that we have already serached for the dependencies for this package
+# returns a list of dependencies or "none" meaning that we have already sear ched for the dependencies for this package
 
 	puts $debug_out(1) "get_aur_dependencies called for $package"
 	puts $debug_out(2) "get_aur_dependencies - previous searches included $depends_searches"
@@ -3833,7 +3998,7 @@ global debug_out depends_searches list_all list_installed list_local
 			puts $debug_out(2) "get_aur_dependencies - \"$package\" was not found in the AUR package list" 
 			return "cancel"
 		} elseif {$basename != $package} {
-			set ans [tk_messageBox -default ok -detail "Do you want to install $basename?" -icon question -message "The package \"$package\" is a part of \"$basename\"" -parent . -title "Install $package" -type okcancel]
+ 			set ans [tk_messageBox -default ok -detail "Do you want to continue with $basename?\n\nHint: to install $package, first install $basename, but elect not to complete the installation. Then select Tools > Install AUR/Local and browse to $tmp_dir/aur_upgrades/$basename/$package* and install it. Be sure to install any dependencies first. Vpacman will clean up unwanted files when it is closed." -icon question -message "The package \"$package\" is a part of \"$basename\"" -parent . -title "Find the dependencies for $package" -type okcancel]
 			if {$ans == "cancel"} {
 				puts $debug_out(3) "get_aur_dependencies - do not install \"$package\" with the basename of \"$basename\""
 				return "cancel"
@@ -4492,9 +4657,14 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out filter f
 		update
 	
 		if {$error == 1} {
-			# OK so it looks like there is no internet available, so reset everything to normal and return
-			set selected_list 0
-			set filter "all"
+			# OK so it looks like there is no internet available, so just show what we've got
+			if {$aur_all} {
+				list_show $list_local
+				.filter_list_aur_updates configure -text "AUR/Local Packages ([llength $list_local])"
+			} else {
+				list_show ""
+				.filter_list_aur_updates configure -text "AUR/Local Updates (0)"
+			}
 			puts $debug_out(1) "get_aur_updates failed"
 			return 1
 		}
@@ -4884,7 +5054,12 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 					-sticky ns
 				.wp.wftwo.dataview.moreinfo insert 1.0 "Searching ..."
 				update
+				set depends 0
 				if {$available != "{}"} {
+					# the package is installed
+					if {$version != $available} {
+						set depends [read_dependencies [list $package $version $available]]
+					}
 					# try to get the extended info from the local database if the package is installed
 					puts $debug_out(2) "get_dataview - try local database ([expr [clock milliseconds] - $start_time])"
 					set error [catch {exec pacman -b $tmp_dir -Qi $package} result]
@@ -4924,7 +5099,6 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 							# add the URL to the text box and use the pre-defined tags to alter how it looks
 							.wp.wftwo.dataview.moreinfo insert end "[string range $row 18 end]\n" "url_tag get_url url_cursor_in url_cursor_out" 
 						} else {
-							# All this section is repeated from above and should probably be in a procedure
 							if {[string first "Version" $row] == 0} {
 								if {$available == "{}"} {
 									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat { } [expr $index -9]]: no\n"
@@ -4949,6 +5123,8 @@ global aur_only browser dataview debug_out pacman_files_upgrade pkgfile_upgrade 
 									.wp.wftwo.dataview.moreinfo insert end "Installed[string repeat { } [expr $index -9]]: $version\n"
 									.wp.wftwo.dataview.moreinfo insert end "Available[string repeat { } [expr $index -9]]: $available\n"
 								}
+							} elseif {[string first "Depends On" $row] == 0 && $depends != 0} {
+								.wp.wftwo.dataview.moreinfo insert end "Depends On *[string repeat { } [expr $index -12]]: $depends\n"
 							} else {
 								.wp.wftwo.dataview.moreinfo insert end "$row\n"
 							}
@@ -5276,6 +5452,30 @@ global dbpath debug_out start_time tmp_dir
 	return [list [file mtime $tmp_dir/sync] $sync_mtime]
 }
 
+proc get_system_data {data} {
+
+global debug_out system tmp_dir
+# if thread_get_system_data has returned the system value then set the system variable here,
+# if not then check that the system variable was already set, if not, either the thread did not finish or it never ran
+# so initialize it now
+
+	puts $debug_out(1) "get_system_data called"
+	if {$data != ""} {
+		puts $debug_out(1) "get_system_data - system data found"
+		set system [split $data \n]
+	}
+	
+	if {$system == ""} {
+		puts $debug_out(1) "get_system_data - system data not found"
+		set_message "terminal" "Fetching system data"
+		update
+		set system [split [eval [concat exec pacman -b $tmp_dir -Si]] \n]
+		set_message "terminal" ""
+		update
+	}
+	puts $debug_out(1) "get_system_data completed"
+}
+
 proc get_terminal {} {
 
 global debug_out start_time su_cmd terminal terminal_string tmp_dir
@@ -5351,6 +5551,7 @@ global debug_out start_time su_cmd terminal terminal_string tmp_dir
 			set_message terminal "Xterm has been installed"
 			update
 			puts $debug_out(2) "get_terminal - now call start"
+			# call start
 			start
 			filter
 		}		
@@ -5378,14 +5579,23 @@ global debug_out known_terminals
 # get the terminal_string for terminal from the known_terminals string
 	
 	puts $debug_out(1) "get_terminal_string called for $terminal"
-	if {[lsearch $known_terminals $terminal] != -1} {
+	if {[lsearch $known_terminals $terminal] == -1} {
 		set terminal_string "$terminal --title <title> --command <command>"
-		puts $debug_out(2) "get_terminal_string - terminal is $terminal, String is $terminal_string"
-	} else {
-		set terminal_string "$terminal "
+		puts $debug_out(2) "get_terminal_string - terminal $terminal is unknown, string is set to default $terminal_string"
+		
+		tk_messageBox -default ok -detail "The terminal \"$terminal\" is unknown.\n  - \"$terminal\" must be installed.\n  - The terminal string is used to call a terminal session and must include <title> to indicate the window title and <command> for the command to be run.\n\nNow edit and correct the terminal string as necessary." -icon info -message "The Terminal String has been set to default" -parent . -title "New Terminal" -type ok
+		
 		focus .config.terminal_string
-		.config.terminal_string icursor end
-		puts $debug_out(2) "get_terminal_string - terminal is $terminal - not a known terminal"
+		.config.terminal_string icursor 0
+	} else {
+		foreach {name string} $known_terminals {
+			if {$name == $terminal} {
+				set terminal_string "$name $string"
+				break
+			}
+		}
+		focus .config.terminal_string
+		puts $debug_out(2) "get_terminal_string - terminal is $terminal - string is $terminal_string"
 	}	
 	.config.terminal selection clear
 	.config.terminal_string selection clear
@@ -5508,7 +5718,7 @@ global debug_out list_all list_local list_local_ids list_installed list_outdated
 	set list_installed ""
 	set list_outdated ""
 	set list_uninstalled ""
-	
+	# we could get the full system data here to use later, with pacman -Si, but this takes half the time!
 	set details [split [exec pacman -b $tmp_dir -Ss] \n]
 	foreach {element description} $details {
 		# find the group(s) that the package belongs to
@@ -6576,7 +6786,7 @@ global aur_all aur_versions debug_out filter filter_list find group list_all lis
 	} else {
 		set aur_versions $versions
 	}
-	puts $debug_out(1) "put_aur_versions - aur_versions set to $aur_versions"
+	puts $debug_out(3) "put_aur_versions - aur_versions set to $aur_versions"
 	# reset the number of local files that need to be updated
 	set local_newer 0
 	# read each of the local packages and compare them to the information in aur_versions
@@ -6675,7 +6885,7 @@ global aur_all aur_versions debug_out filter filter_list find group list_all lis
 		puts $debug_out(2) "put_aur_versions - configured text to local_newer \"AUR/Local Updates ($local_newer)\""
 		.filter_list_aur_updates configure -text "AUR/Local Updates ($local_newer)"
 	}
-	puts $debug_out(3) "put_aur_versions - unset thread"
+	puts $debug_out(2) "put_aur_versions - unset thread"
 	set thread ""
 	puts $debug_out(1) "put_aur_versions - completed ([expr [clock milliseconds] - $start_time])"
 }
@@ -6843,8 +7053,16 @@ global debug_out
 		regsub -all {\\} $snapshot {} snapshot
 		set snapshot [string trim $snapshot \"]
 	}
+	set index [string first "\"OutOfDate\":" $line]
+	if {$index == -1} {
+		set outofdate ""
+	} else {
+		set position [expr $index + 12]
+		set outofdate [string range $line $position [expr [string first \, $line $position] - 1]]
+		if {$outofdate != "null"} {set outofdate [clock_format $outofdate short_full]}
+	}
 
-	puts $debug_out(2) "read_aur_info - found BaseName: $basename, Version: $version, Description: $description, URL: $url, Updated: $updated, Depends: $depends, CheckDepends: $checkdepends, MakeDepends: $makedepends, OptDepends: $optdepends, Keywords: $keywords, Snapshot: $snapshot"
+	puts $debug_out(2) "read_aur_info - found BaseName: $basename, Version: $version, Description: $description, URL: $url, Updated: $updated, Depends: $depends, CheckDepends: $checkdepends, MakeDepends: $makedepends, OptDepends: $optdepends, Keywords: $keywords, Snapshot: $snapshot, OutOfDate: $outofdate"
 	
 	puts $debug_out(1) "read_aur_info completed"
 	
@@ -6863,6 +7081,342 @@ global debug_out
 	set config_text [exec cat "/etc/pacman.conf"]
 	view_text $config_text "Pacman Configuration"
 	puts $debug_out(1) "read_config completed"
+}
+
+proc read_dependencies {params} {
+
+global count_outdated debug_out list_installed list_outdated start_time system tmp_dir
+# test the dependencies of the installed package and the available package and list any changes
+
+    if {"$params" != "report"} {
+		set package [lindex $params 0]
+		set version [lindex $params 1]
+		set available [lindex $params 2]
+		puts $debug_out(1) "read_dependencies called for $package - version is $version, available is $available - ([expr [clock milliseconds] - $start_time])"
+	
+		# check that we have not installed a newer version than in the official repos
+		if {[test_versions $version $available] == "newer"} {
+			puts $debug_out(2) "read_dependencies - available version of $package is newer"
+			set error [catch {exec pacman -b $tmp_dir -Qi $package} result]
+			set result [split $result \n]
+			set value [expr [string first ":" [lindex $result 0]] + 2]
+			set old_deps [string range [lsearch -inline -glob $result "Depends On*"] $value end]
+			if {$old_deps == "None"} {set old_deps ""}
+			puts $debug_out(2) "read_dependencies - old dependencies are \"$old_deps\""
+			# if the package is a local install then use get_aur_info
+			set error [catch {exec pacman -b $tmp_dir -Si $package} result]
+			set new_deps [string range [lsearch -inline -glob [split $result \n] "Depends On*"] $value end]
+			if {$new_deps == "None"} {set new_deps ""}
+			if {$error == 1} {
+				puts $debug_out(2) "read_dependencies - pacman -Si returned an error try get_aur_info"
+				set info [get_aur_info $package]
+				set new_deps [lindex $info 5 ]
+			}
+			puts $debug_out(2) "read_dependencies - new dependencies are \"$new_deps\""
+			# first run a simple test
+			if {[lsort $old_deps] == [lsort $new_deps]} {
+				puts $debug_out(2) "read_dependencies - no changes"
+				puts $debug_out(1) "read_dependencies for $package completed - ([expr [clock milliseconds] - $start_time])"
+				return 0
+			} else {
+			# then run an item by item test
+				puts $debug_out(2) "read_dependencies - dependencies are not the same - ([expr [clock milliseconds] - $start_time])"
+				# now find the changes
+				set compare 0
+				set new_list ""
+				set old_count 0
+				set new_count 0
+				while {true} {
+					set old_dep [lindex $old_deps $old_count]
+					set new_dep [lindex $new_deps $new_count]
+					if {"$old_dep" == "" && "$new_dep" == ""} {break}
+					puts -nonewline $debug_out(3) "read_dependencies - Compare $old_dep to $new_dep -"
+					if {$old_dep == $new_dep} {
+						puts $debug_out(3) " they are the same"
+						set new_list [concat $new_list $new_dep]
+						incr old_count
+						incr new_count
+					} else {
+						set compare 1
+						puts $debug_out(3) " they are not the same"
+						if {"$old_dep" == ""} {
+							puts $debug_out(3) "read_dependencies - $new_dep is new"
+							set new_list [concat $new_list "+$new_dep"]
+							incr new_count
+						} elseif {"$new_dep" == ""} {
+							puts $debug_out(3) "read_dependencies - $old_dep is no longer needed"
+							set new_list [concat $new_list "-$old_dep"]
+							incr old_count
+						} else {
+							if {[lsearch $old_deps $new_dep] == -1} {
+								puts $debug_out(3) "read_dependencies - $new_dep is new"
+								set new_list [concat $new_list "+$new_dep"]
+								incr new_count
+							} else {
+								puts $debug_out(3) "read_dependencies - $new_dep is still needed"
+								set new_list [concat $new_list "$new_dep"]
+								incr new_count
+							}
+							if {[lsearch $new_deps $old_dep] == -1} {
+								puts $debug_out(3) "read_dependencies - $old_dep is no longer needed"
+								set new_list [concat $new_list "-$old_dep"]
+								incr old_count
+							} else {
+								incr old_count
+							}
+						}
+					}
+				}
+				puts $debug_out(1) "read_dependencies for $package completed - ([expr [clock milliseconds] - $start_time])"
+				if {$compare == 0} {return 0}
+				return $new_list
+			}
+		}
+		return 0
+	} else {
+		puts $debug_out(1) "read_dependencies called to report updated dependencies - ([expr [clock milliseconds] - $start_time])"
+		
+		if {[llength $list_outdated] == 0} {
+			puts $debug_out(1) "read_dependencies - no updates available - return 1"
+			set_message "terminal" "No updates available"
+			after 5000 {set_message reset ""}
+			return 1
+		}
+			
+		# make a list of all the update packages
+		puts $debug_out(2) "read_dependencies - get list of updates available"
+		set packages ""
+		foreach item $list_outdated {
+			lappend packages [lrange $item 1 1]
+		}
+		set packages [lsort $packages]
+		
+		# now get the details from the local and system databases
+		puts $debug_out(2) "read_dependencies - get list of local packages"
+		set local [split [eval [concat exec pacman -b $tmp_dir -Qi $packages]] \n]
+		if {$system == ""} {
+			puts $debug_out(2) "read_dependencies - refresh system variable"
+			get_system_data ""
+		}
+		
+		puts $debug_out(2) "read_dependencies - start dependency report"
+		
+		set test_results "\n<strong>DEPENDENCY CHANGES FOR THE $count_outdated PACKAGES LISTED AS \"UPDATES AVAILABLE\":</strong>\n\n"
+		
+		set count 0
+		set current 0
+		set total [llength $list_outdated]
+		# can we assume that value will be the same for local and system reports
+		set value [expr [string first ":" [lindex $system 0]] + 2]
+		# set value [expr [string first ":" [lindex $local 0]] + 2]
+		puts $debug_out(2) "read_dependencies - value set to $value"
+	
+		foreach package $packages {
+			puts $debug_out(3) "read_dependencies for $package - ([expr [clock milliseconds] - $start_time])"
+	
+			# display a helpful message	
+			incr current
+			set_message "terminal" "Compiling report of dependency changes for $current/$total upgrades"
+			update
+						
+			set index [lsearch -glob $local "Name* $package"]
+			set old_deps [string range [lsearch -inline -glob -start $index $local "Depends On*"] $value end]
+			if {$old_deps == "None"} {set old_deps ""}
+			puts $debug_out(3) "read_dependencies - Old dependencies are $old_deps"
+			set index [lsearch -glob $system "Name* $package"]
+			set new_deps [string range [lsearch -inline -glob -start $index $system "Depends On*"] $value end]
+			if {$new_deps == "None"} {set new_deps ""}
+			puts $debug_out(3) "read_dependencies - New dependencies are $new_deps"
+			# check if the dependencies have not changed
+			if {[lsort $old_deps] == [lsort $new_deps]} {
+			puts $debug_out(3) "read_dependencies - Dependencies have not changed"
+				continue
+			}
+			puts $debug_out(3) "read_dependencies - Dependencies have changed"
+			incr count
+			append test_results "\nDependency updates for $package\n\n"
+			set added ""
+			set removed ""
+			set required ""
+			foreach dep $old_deps {
+				if {[lsearch $new_deps $dep] == -1} {
+					puts $debug_out(3) "read_dependencies - $dep is no longer needed"
+					set removed [concat $removed $dep]
+				}
+			}
+			if {[llength $removed] > 0} {
+				append test_results "\tRemoves: $removed\n"
+			}
+
+			foreach dep $new_deps {
+				if {[lsearch $old_deps $dep] == -1} {
+					puts $debug_out(3) "read_dependencies - $package needs new dependencies $dep"
+					set added [concat $added $dep]
+					#check for version upgrades
+					if {[string first "=" $dep] != -1} {
+						if {[string first [string range $added 0 [string first "=" $dep]] $removed] != -1} {
+							puts $debug_out(3) "read_dependencies - This is a version upgrade"
+							continue
+						}
+					}
+					if {[lsearch -index 1 $list_installed $dep] != -1} {
+						puts $debug_out(3) "read_dependencies - $dep is already installed"
+						set added [concat $added (installed)]
+					} elseif {[lindex [read_dependencies_provides $dep] 1] != ""} {
+						puts $debug_out(3) "read_dependencies - $dep is already provided by an installed package"
+						set added [concat $added (installed)]
+					} else {
+						puts $debug_out(3) "read_dependencies - $dep is not installed, find any extra dependencies for $dep"
+						set tests $dep
+						while true {
+							# now get all the additional dependencies to install for $tests
+							puts $debug_out(3) "read_dependencies - test is now $tests"
+							puts $debug_out(3) "read_dependencies - call read_dependencies_extra for [lindex $tests 0]"
+							set more_deps [read_dependencies_extra [lindex $tests 0]]
+							puts $debug_out(3) "read dependencies - extra returned more_deps - \"$more_deps\" for [lindex $tests 0], set tests to \"[concat [lrange $tests 1 end] $more_deps]\""
+							# read_dependencies_extra returns more_deps which are only packages which are not installed
+							if {$more_deps != ""} {
+								set required [concat $required  "| [lindex $tests 0]: $more_deps"]
+								puts $debug_out(3) "read_dependencies - \"$more_deps\" is required by \"[lindex $tests 0]\""
+							}
+							set tests [concat [lrange $tests 1 end] $more_deps]
+							if {$tests == ""} {
+								puts $debug_out(3) "read dependencies - tests (and more_deps) are blank, so break"
+								break
+							}
+							puts $debug_out(3) "read_dependencies - there are more tests - \"$tests\""
+						}
+					}
+				}
+			}
+			if {[llength $added] > 0} {
+				append test_results "\tAdds   : $added\n"
+			}
+			if {[llength $required] > 0} {
+				# remove any surrounding | from $required and then split required into a proper list
+				set required [split [string trim $required "|"] "|"]
+				# each item is a dependency followed by a list of required dependencies
+				# strip off any surrounding blank spaces
+				foreach req $required {
+					append test_results "\tRequired by [string trim $req " "]\n"
+				}
+			}
+		}
+		if {$count == 0} {append test_results "\n\nNo dependency changes in the package updates available"}
+		# now display the report
+		set_message "terminal" ""
+		puts $debug_out(1) "read_dependencies for all updates completed - ([expr [clock milliseconds] - $start_time])"
+		puts $debug_out(1) "read_dependencies - view results"
+		view_text $test_results "Dependency Updates"
+		return 0			
+	}	
+}
+
+proc read_dependencies_extra {package} {
+	
+global debug_out list_installed start_time system
+# find any additional dependencies needed for a given package which are not already installed
+
+	puts $debug_out(3) "read_dependencies_extra called for $package"
+	set added ""
+	set index ""
+	set value [expr [string first ":" [lindex $system 0]] + 2]
+	
+	set index [lsearch -glob $system "Name* $package"]
+	puts $debug_out(3) "read_dependencies_extra - $package found in system at $index"
+	# ok so if we cannot find the dependency in the system packages, so we could search the files database for it,
+	# but we may not have an up to date files database, so try to replicate it here.
+	if {$index == -1} {
+		puts $debug_out(3) "read_dependencies_extra - search for $package in Provides"
+		set result [read_dependencies_provides $package]
+		set provides [lindex $result 0]
+		set installed [lindex $result 1]
+		puts $debug_out(3) "read_dependencies_extra - $package found in uninstalled \"$provides\" and installed \"$installed\""
+		# package names returned by Provides have already been found in system
+		# if there are installed packages which provide $package then we don't need to look any further
+		# If there is more than one package, they will all be either installed or not
+		if {$installed != ""} {
+			puts $debug_out(3) "read_dependencies_extra - $package found in installed packages \"$installed\""
+		} elseif {$provides != ""} {
+			puts $debug_out(3) "read_dependencies_extra - $package found in uninstalled packages \"$provides\""
+			set added [concat $added "$provides"]
+		} else {
+			puts $debug_out(3) "read_dependencies_extra - $package was not found in system or provides - give up"
+		}
+	} else {
+		# now check if there are any further dependencies
+		puts $debug_out(3) "read_dependencies_extra - $package found in system at $index"
+		set new_deps [string range [lsearch -inline -glob -start $index $system "Depends On*"] $value end]
+		if {$new_deps == "None"} {set new_deps ""}
+		puts $debug_out(3) "read_dependencies_extra - $package depends on \"$new_deps\""
+		foreach dep $new_deps {
+			set index [lsearch -glob $system "Name* $dep"]
+			if {$index != -1} {
+				puts $debug_out(3) "read_dependencies_extra - $dep found in system at $index"
+				if {[lsearch -index 1 $list_installed $dep] != -1} {
+					puts $debug_out(3) "read_dependencies_extra - $dep is already installed"
+				} else {
+					puts $debug_out(3) "read_dependencies_extra - $dep is not installed"
+					set added [concat $added "$dep"]
+				}
+			} else {
+				puts $debug_out(3) "read_dependencies_extra - $dep was not found in system, search in read_dependencies_provides"
+				set result [read_dependencies_provides $dep]
+				set provides [lindex $result 0]
+				set installed [lindex $result 1]
+				puts $debug_out(3) "read_dependencies_extra - provides returned \"$provides\" provides $dep and installed packages \"$installed\" which provide $dep"
+				if {$installed != ""} {
+					puts $debug_out(3) "read_dependencies_extra - $dep is provided by installed package(s)"
+				} elseif {$provides != ""} {
+					puts $debug_out(3) "read_dependencies_extra - \"$provides\" is not installed"
+					set added [concat $added "$provides"]
+				} else {
+					puts $debug_out(3) "read_dependencies_extra - $dep was not found in system or provides - give up"
+				}
+			}
+		}
+	}
+	puts $debug_out(3) "read_dependencies_extra completed and returned $added - ([expr [clock milliseconds] - $start_time])"
+ 	return $added
+}
+
+proc read_dependencies_provides {package} {
+	
+global debug_out list_installed start_time system
+# Check for any dependencies that are provided by another package and which are required by added dependencies on an upgrade
+
+	puts $debug_out(3) "read_dependencies_provides called for $package - ([expr [clock milliseconds] - $start_time])"
+	set installed ""
+	set provides "" 
+	set value [expr [string first ":" [lindex $system 0]] + 2]
+	
+	# if we reverse the system data here then we may have to do it more than once, each time that provides is called
+	# we could do it in read_dependencies but then it might not be needed.
+	# lrevers system takes around 7 milliseconds, so we can accept the trade-off
+	set rsystem [lreverse $system]
+	set r_index [lsearch -all -glob $rsystem "Provides* $package*"]
+	puts $debug_out(3) "read_dependencies_extra - $package found in rsystem at $r_index"
+	if {$r_index == -1} {
+		puts $debug_out(3) "read_dependencies_extra - $package found in provides - return blank"
+		return ""
+	}
+	# now find the package name(s) that provide it
+	foreach i $r_index {
+		set name [string range [lsearch -inline -glob -start $i $rsystem "Name*"] $value end]
+		puts $debug_out(3) "read_dependencies_extra - found $name in rsystem"
+		set s_index [lsearch -inline -glob $system $name]
+		puts $debug_out(3) "read_dependencies_extra - found $name in system at $s_index"
+		if {[lsearch -index 1 $list_installed $name] == -1} {
+			puts $debug_out(3) "read_dependencies_extra - $name is not installed"
+			set provides [concat $provides "$name"]
+		} else {
+			# if any of the packages are already installed then return them
+			puts $debug_out(3) "read_dependencies_extra - $name is already installed"
+			set installed [concat $installed "$name"]
+		}
+	}
+	puts $debug_out(3) "read_dependencies_provides completed and returned uninstalled \"$provides\" and installed \"$installed\" packages- ([expr [clock milliseconds] - $start_time])"
+	return [list $provides $installed]
 }
 
 proc read_log {} {
@@ -7098,6 +7652,13 @@ global clock_id debug_out start_time sync_time
 	if {[string length $days] == 1} {set days "0$days"}
 	puts $debug_out(3) "set_clock - update set to ${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end]"
 	.filter_clock configure -text "${days}:[string range "0${hours}" end-1 end]:[string range "0${mins}" end-1 end]"
+	if {[string trimleft $days 0] > 7} {
+		.filter_clock configure -foreground red
+		balloon_set .filter_clock "Run Tools > Sync to update the sync data"
+	} else {
+		.filter_clock configure -foreground black
+		balloon_set .filter_clock "The elapsed time since the last sync (d:h:m)"
+	}		
 	update
 
 	# wait, up to, a minute
@@ -7234,11 +7795,13 @@ global debug_out list_show list_show_order
 
 proc start {} {
 	
-global aur_files_TID count_all count_installed count_uninstalled count_outdated debug_out list_all list_local select start_time test_system_TID threads tmp_dir
+global aur_files_TID count_all count_installed count_uninstalled count_outdated debug_out list_all list_local get_system_data_TID select start_time system test_system_TID threads tmp_dir
 # this is the process to start the programme from scratch or after an update is called	
 
 	puts $debug_out(1) "start - called, call list_local ([expr [clock milliseconds] - $start_time])"
 	set select false
+	set system ""
+	
 	list_local
 	puts $debug_out(2) "start - list_local done, call list_all ([expr [clock milliseconds] - $start_time])"
 	list_all
@@ -7251,9 +7814,11 @@ global aur_files_TID count_all count_installed count_uninstalled count_outdated 
 	.filter_not_installed configure -text "Not Installed ($count_uninstalled)"
 	.filter_updates configure -text "Updates Available ($count_outdated)"
 	if {$threads} {
-		puts $debug_out(2) "start - Call threads to find the files of local packages and test the system ([expr [clock milliseconds] - $start_time])"
-		puts $debug_out(2) "start - Call aur_files thread with main_TID and list_local"
+		puts $debug_out(2) "start - Call threads to find the files of local packages, get the system data and test the system ([expr [clock milliseconds] - $start_time])"
+		puts $debug_out(2) "start - Call aur_files thread with main_TID, list_local and ttmp_dir"
 		thread::send -async $aur_files_TID [list thread_get_aur_files [thread::id] $list_local $tmp_dir]
+		puts $debug_out(2) "start - Call get_system_data thread with main_TID and tmp_dir"
+		thread::send -async $get_system_data_TID [list thread_get_system_data [thread::id] $tmp_dir]
 		puts $debug_out(2) "start - Call test_system thread with main_TID"
 		thread::send -async $test_system_TID [list thread_test_system [thread::id]]
 	}
@@ -7309,7 +7874,7 @@ global debug_out
 
 proc test_configs {} {
 	
-global browser debug_out editor known_browsers known_editors known_terminals one_time start_time terminal 
+global browser debug_out diffprog editor known_browsers known_diffprogs known_editors known_terminals one_time start_time terminal terminal_string
 # Test for sane configuration options
 
 	puts $debug_out(1) "test_configs - called ([expr [clock milliseconds] - $start_time])"
@@ -7318,19 +7883,27 @@ global browser debug_out editor known_browsers known_editors known_terminals one
 	if {$browser != "" && [catch {exec which $browser}] == 1} {
 		puts $debug_out(2) "test_configs - browser is not installed"
 		tk_messageBox -default ok -detail "\"$browser\" is configured but is not installed" -icon warning -message "The browser will be reset" -parent . -title "Incorrect Option" -type ok 
-		configurable_default browser $known_browsers
+		set browser [configurable_default browser $known_browsers]
+	}
+	puts $debug_out(2) "test_configs - test diff_prog \"$diffprog\""
+	if {$diffprog != "" && [catch {exec which $diffprog}] == 1} {
+		puts $debug_out(2) "test_configs - diffprog is not installed"
+		tk_messageBox -default ok -detail "\"$diffprog\" is configured but is not installed" -icon warning -message "The compare programme will be reset" -parent . -title "Incorrect Option" -type ok 
+		set diffprog [configurable_default browser $known_diffprogs]
 	}
 	puts $debug_out(2) "test_configs - test editor \"$editor\""
 	if {$editor != "" && [catch {exec which [lindex $editor 0]}] == 1} {
 		puts $debug_out(2) "test_configs - editor is not installed"
 		tk_messageBox -default ok -detail "\"[lindex $editor 0]\" is configured but is not installed" -icon warning -message "The editor will be reset" -parent . -title "Incorrect Option" -type ok 
-		configurable_default editor $known_editors
+		set editor [configurable_default editor $known_editors]
 	}
 	puts $debug_out(2) "test_configs - test terminal \"$terminal\""
 	if {$terminal != "" && [catch {exec which $terminal}] == 1} {
 		puts $debug_out(2) "test_configs - terminal is not installed"
 		tk_messageBox -default ok -detail "\"$terminal\" is configured but is not installed" -icon warning -message "The terminal will be reset" -parent . -title "Incorrect Option" -type ok 
-		configurable_default terminal $known_terminals
+		set result [configurable_default terminal $known_terminals]
+		set terminal [lindex $result 0]
+		set terminal_string [lindex $result 1]
 	} 
 	# the terminal must exist
 	if {$terminal == ""} {
@@ -7780,14 +8353,14 @@ global debug_out show_buttonbar
 # toggle the buttonbar on or off
 
 	puts $debug_out(1) "toggle_buttonbar called"
-	if {[.menubar.view entrycget 5 -label] == "Hide Toolbar"} {
-		.menubar.view entryconfigure 5 -command {
+	if {[.menubar.view entrycget 6 -label] == "Hide Toolbar"} {
+		.menubar.view entryconfigure 6 -command {
 			grid .buttonbar -in . -row 2 -column 1 -columnspan 3 -sticky ew
 			set show_buttonbar "yes"
 			toggle_buttonbar
 		} -label "Show Toolbar" -state normal -underline 5
 	} else {
-		.menubar.view entryconfigure 5 -command {
+		.menubar.view entryconfigure 6 -command {
 			grid remove .buttonbar 
 			set show_buttonbar "no"
 			toggle_buttonbar
@@ -9357,13 +9930,14 @@ menu .menubar \
 		.menubar.view add command -command {read_news} -label "Latest News" -state normal -underline 7
 		.menubar.view add command -command {read_config} -label "Pacman Configuration" -state normal -underline 7
 		.menubar.view add command -command {read_log} -label "Pacman Log" -state normal -underline 7
+		.menubar.view add command -command {read_dependencies report} -label "Dependency Updates" -state normal -underline 1
 		.menubar.view add separator
 		.menubar.view add command -command {
 			. configure -menu ""
 			# this command will add two entries to the end of the popup menu
 			# when the menu entry is selected
 			.listview_popup add separator
-			.listview_popup add command -label "Show Menu" -command {
+			.listview_popup add command -label "Show Menubar" -command {
 				. configure -menu .menubar
 				set show_menu "yes"
 				# when the command is executed, remove the last two lines, whatever they may be
@@ -9510,16 +10084,18 @@ frame .buttonbar
 			# so we need to update idletasks
 			update idletasks
 			puts $debug_out(1) ".buttonbar.entry_find - find string is %P"
-			if {[string length %P] == 0} {
-				set_message find ""
-				# sort and show the list
-				set filter_list [sort_list $filter_list]
-				list_show $filter_list
-			} elseif {[string length %P] > 2} {
-				if {$findtype == "findname"} {
-					find %P $filter_list name
-				} else {
-					find %P $filter_list all
+			after 500 {
+				if {[string length %P] == 0} {
+					set_message find ""
+					# sort and show the list
+					set filter_list [sort_list $filter_list]
+					list_show $filter_list
+				} elseif {[string length %P] > 2} {
+					if {$findtype == "findname"} {
+						find %P $filter_list name
+					} else {
+						find %P $filter_list all
+					}
 				}
 			}
 			# any error in the find script will turn off the validate command
@@ -9807,13 +10383,6 @@ frame .buttonbar
 				.wp.wftwo.dataview.info insert end "\n"			
 				.wp.wftwo.dataview.info insert end "Unable to search repositories for $findfile\n"
 			}		
-			if {[string first "pacman" $command] == 0} {
-				.wp.wftwo.dataview select .wp.wftwo.dataview.info
-				update
-				.wp.wftwo.dataview.info insert end "\n"			
-				.wp.wftwo.dataview.info insert end "Consider installing pkgfile\n"
-			}
-
 		}
 		puts $debug_out(1) ".buttonbar.entry_findfile completed"
 	}
@@ -9913,6 +10482,7 @@ frame .filters
 		-command {
 			update idletasks
 			cleanup_checkbuttons false
+			.menubar.tools entryconfigure 6 -state normal
 			if {$filter == 0} {
 				set filter "outdated"
 			} else {
@@ -11347,7 +11917,7 @@ if {$show_menu == "no"} {
 # the button bar is mapped, but remove it if we did not ask for it
 if {$show_buttonbar == "no"} {
 	grid remove .buttonbar
-	.menubar.view entryconfigure 5 -command {
+	.menubar.view entryconfigure 6 -command {
 			grid .buttonbar -in . -row 2 -column 1 -columnspan 3 -sticky ew
 			set show_buttonbar "yes"
 			toggle_buttonbar
@@ -11585,6 +12155,18 @@ puts $debug_out(1) "THREADS - start threads set up -([expr [clock milliseconds] 
 	    }
 	    thread::wait
 	}] 
+
+	# create a thread to get the system data (sync)
+	# this thread will keep running so that it can be used whenever it is needed
+	
+	set get_system_data_TID [thread::create {
+	
+		proc thread_get_system_data {main_TID tmp_dir} {
+			set error [catch {exec pacman -b $tmp_dir -Si} result] 	
+			eval [subst {thread::send -async $main_TID {::get_system_data [list $result]}}]
+	    }
+	    thread::wait
+	}] 
 	
 	# create a thread to test the system state
 	# this thread will keep running so that it can be used whenever it is needed
@@ -11618,11 +12200,10 @@ puts $debug_out(1) "START - window display - show first window, now update scree
 
 # just in case the window was iconified by the -h argument
 wm deiconify .
-update idletasks
-# but do not interact with the window
-# place a grab on something unimportant to avoid random button presses on the window
-puts $debug_out(1) "START - grab set ([expr [clock milliseconds] - $start_time])"
-grab set .buttonbar.label_message
+
+# just in case the treeview widget is clicked on before it is populated
+# set the treeview selected background to unselected
+ttk::style map Treeview -background {selected #FFFFFF}
 
 # save the list of repos for later
 set list_repos [split [exec pacman-conf -l] \n]
@@ -11636,14 +12217,23 @@ start
 list_show $list_all
 # so we have an updated list - set filter_list to the new list
 set filter_list $list_all
+
+# just in case the treeview widget was clicked on before it was populated
+# goto the first record
+.wp.wfone.listview xview moveto 0
+.wp.wfone.listview yview moveto 0
+# clear any selections
+all_clear
+# reset the treeview selected background colour
+ttk::style map Treeview -background {selected #4a6984}
+
 if {$su_cmd == ""} {
 	tk_messageBox -default ok -detail "Some commands cannot be run as root. Consider restarting as a standard user" -icon warning -message "Running vpacman as root is not recommended." -parent . -title "Warning" -type ok
 }
 if {!$threads} {
 	tk_messageBox -default ok -detail "Some functions will be restricted e.g.:\n  files searches will exclude AUR packages.\n  AUR version lookup will be delayed.\n\nConsider installing a threaded version of tcl." -icon warning -message "Running tcl without threading." -parent . -title "tcl not threaded" -type ok
 }
-# release the grab
-grab release .buttonbar.label_message
+
 puts $debug_out(1) "START - window display complete - grab released ([expr [clock milliseconds] - $start_time])"
 # select the download programme to use
 # first check for a preference set in pacman.conf, otherwise prefer curl if it is installed
