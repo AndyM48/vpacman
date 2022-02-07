@@ -12,7 +12,7 @@ exec wish "$0" -- "$@"
 
 #	 This is Vpacman - a Graphical front end for pacman and the AUR
 #
-#    Copyright (C) 2018 - 2019  Andrew Myers <andrew dot myers@wanadoo dot fr>
+#    Copyright (C) 2018 - 2022  Andrew Myers <andrew dot myers@wanadoo dot fr>
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ exec wish "$0" -- "$@"
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # set the version number
-set version "1.4.6"
+set version "1.4.7"
 
 # save any arguments passed to vpacman
 set args $argv
@@ -2031,7 +2031,7 @@ bind bubble <Motion> {
 proc check_config_files {} {
 
 global debug_out diffprog home su_cmd
-# check /etc and /usr/bin for any configuration files which need to be updated
+# check /etc and /usr/bin /var/lib for any configuration files which need to be updated
 
 	puts $debug_out(1) "check_config_files called"
 	set config_files ""
@@ -2191,7 +2191,7 @@ global dataview debug_out list_repos listview_current pacman_files_upgrade pkgfi
 				puts $debug_out(2) "check_repo_files - db files update failed"
 				tk_messageBox -default ok -detail "The missing temporary databases could not be downloaded.\n\nConsider running a Full System Upgrade to avoid further errors." -icon error -message "Download Failed" -parent . -title "Database Error" -type ok
 				# this qualifies as a sync error so set the status warnings error flag
-				place_warning_icon .filter_icons_warnings
+				place_warning_icon .filter_icons_warning
 				return 1
 			} else {
 				puts $debug_out(2) "check_repo_files - db files update succeeded"
@@ -3365,6 +3365,7 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 		}
 	} elseif {$type == "sync"} {
 		# temporary database sync - restart
+		set restart true
 		if {$count_syncs >= 1} {
 			puts $debug_out(2) "\tSync succeeded"
 			# set the sync time
@@ -3381,11 +3382,17 @@ global aur_only aur_updates aur_versions aur_versions_TID clock_id dbpath debug_
 	}
 	# set any reminders about actions needed for certain packages
 	if {$action_message != ""} {set lf "\n"}
+
+	# count how many .pacnew files were created
+	set pacnews [llength [regexp -all -inline ".pacnew" $logtext]]
+	# if there is only one .pacnew and it is pacman-mirrorlist, then set pacnews 0
+	if {$pacnews == 1 && [string first "\[ALPM\] upgraded pacman-mirrorlist" $logtext] != -1} {set pacnews 0}
+
 	foreach {package action} $package_actions {
 		if {[string first " upgraded $package " $logtext] != -1 || [string first " reinstalled $package " $logtext] != -1} {
 			set action_message [append action_message $lf $action]
 			set lf "\n"
-		} elseif {$package == ".pacnew" || $package == ".pacsave"} {
+		} elseif {($package == ".pacnew" && $pacnews != 0) || $package == ".pacsave"} {
 			if {[string first "$package" $logtext] != -1} {
 				set action_message [append action_message $lf $action]
 				set lf "\n"
@@ -3662,6 +3669,10 @@ global debug_out
 		# and wait a few milliseconds - note: this was set to 250 which seemed to be too fast
 		after 500 
 	}
+
+	set error [catch {exec wmctrl -F -a "$action"} result]
+	puts $debug_out(1) "execute_terminal_isopen - raised terminal window with  error $error and result \"$result\""
+
 	puts $debug_out(1) "execute_terminal_isopen - loop has completed after $count loops"
 	return 0
 }
@@ -3786,6 +3797,7 @@ global debug_out filter filter_list find find_message group list_show selected_l
 			return 1
 		} else {
 			$button configure -text "$title ($result)"
+			puts $debug_out(2) "filter checkbutton - set filter_list to list_show ([llength $list_show] packages)"
 			set filter_list $list_show
 			puts $debug_out(1) "filter_checkbutton completed"
 			return 0
@@ -4162,9 +4174,9 @@ global debug_out dlprog
 	if {[test_internet] != 0} {return 1}
 	set package [string map {+ %2B} $package] 
 	if {$dlprog == "curl"} {
-		set error [catch {eval [concat exec curl -Lfs "https://aur.archlinux.org//rpc/?v=5&type=info&arg[]=$package"]} line]
+		set error [catch {eval [concat exec curl -Lfs "https://aur.archlinux.org/rpc?v=5&type=info&arg[]=$package"]} line]
 	} else {
-		set error [catch {eval [concat exec wget -LqO - "https://aur.archlinux.org//rpc/?v=5&type=info&arg[]=$package"]} line]
+		set error [catch {eval [concat exec wget -LqO - "https://aur.archlinux.org/rpc?v=5&type=info&arg[]=$package"]} line]
 	}
 	if {$error != 0} {
 		puts $debug_out(1) "get_aur_info could not get info for $package - error was $error : $line"
@@ -4791,9 +4803,9 @@ global aur_all aur_messages aur_only aur_updates aur_versions debug_out dlprog f
 		set fid [open "$tmp_dir/get_aur_versions.sh" w]
 		puts $fid "#!/bin/bash"
 		if {$dlprog == "curl"} {
-			puts $fid "curl -LfGs \"https://aur.archlinux.org//rpc/?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\" 2>&1"
+			puts $fid "curl -LfGs \"https://aur.archlinux.org/rpc?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\" 2>&1"
 		} else {
-			puts $fid "wget -LqO - \"https://aur.archlinux.org//rpc/?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\" 2>&1"
+			puts $fid "wget -LqO - \"https://aur.archlinux.org/rpc?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\" 2>&1"
 		}
 		puts $fid "if \[ \$? -ne 0 \]; then exit 1; fi"
 		close $fid
@@ -5424,7 +5436,6 @@ global debug_out env pw_entry su_cmd win_mainx win_mainy
 	tkwait window .password
 	puts "Password Window Closed ($pw_entry)"
 	return $pw_entry
-
 }
 
 proc get_sync_time {} {
@@ -5956,7 +5967,7 @@ global debug_out list_local_ids list_show list_show_ids listview_selected_in_ord
 			lappend new_listview_selected "$index $id"
 		}
 	}
-	puts $debug_out(2) "list_show - show all the elements completed ([expr [clock milliseconds] - $start_time])"
+	puts $debug_out(2) "list_show - show all the elements completed for [llength $list] packages (new listview selected is [llength $new_listview_selected] long) ([expr [clock milliseconds] - $start_time])"
 	if {$new_listview_selected != ""} {
 		set new_listview_selected [lsort -index 0 $new_listview_selected]
 		# now add each of the selected items to the listview in the correct order
@@ -5968,10 +5979,11 @@ global debug_out list_local_ids list_show list_show_ids listview_selected_in_ord
 		vwait tv_select
 		puts $debug_out(2) "list_show - Treeview Select has completed ([expr [clock milliseconds] - $start_time])"
 	} else {
-		puts $debug_out(2) "list_show - there are no selections"
+		puts $debug_out(2) "list_show - there are no selections from [llength $list] packages, set blank message and dataview"
 		# we have just shown a new list and nothing is selected, so reset the menu entries
 		set_message selected ""
 		get_dataview ""
+		puts $debug_out(2) "list_show - reset buttons and remove 'Mark' from popup menu"
 		.buttonbar.install_button configure -state disabled
 		.buttonbar.delete_button configure -state disabled
 		.menubar.edit entryconfigure 0 -state normal
@@ -5990,10 +6002,9 @@ global debug_out list_local_ids list_show list_show_ids listview_selected_in_ord
 			.menubar.edit entryconfigure 0 -state disabled
 			.listview_popup entryconfigure 3 -state disabled
 		}
-		puts $debug_out(2) "\tPartial Upgrades set to no"
+		puts $debug_out(2) "list_show - partial upgrades set to no"
 		set part_upgrade 0
 	}
-	update
 	puts $debug_out(2) "list_show - listview_selected_in_order is \"$listview_selected_in_order\""
 	if {[llength $listview_selected_in_order] != 0} {
 		puts $debug_out(1) "\tmove to last selected item"
@@ -7757,7 +7768,7 @@ proc sort_list {list} {
 global debug_out list_show_order start_time
 # show the displayed list in the current order
 
-	puts $debug_out(1) "sort_list called for $list_show_order ([expr [clock milliseconds] - $start_time])"
+	puts $debug_out(1) "sort_list called for $list_show_order and [llength $list] packages ([expr [clock milliseconds] - $start_time])"
 	set heading [lindex $list_show_order 0]
 	set order [lindex $list_show_order 1]
 	set index [lsearch "Repo Package Version Available" $heading]
@@ -10580,6 +10591,10 @@ frame .filters
 			-image warning \
 			-takefocus 0
 		
+		bind .filter_icons_warning <ButtonRelease-1> {
+			system_upgrade
+		}
+		
 		label .filter_icons_disconnected \
 			-image disconnected \
 			-takefocus 0
@@ -12045,9 +12060,9 @@ puts $debug_out(1) "THREADS - start threads set up -([expr [clock milliseconds] 
 			set fid [open "$tmp_dir/thread_aur_versions.sh" w]
 			puts $fid "#!/bin/bash"
 			if {$dlprog == "curl"} {
-				puts $fid "curl -LfGs \"https://aur.archlinux.org//rpc/?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\""
+				puts $fid "curl -LfGs \"https://aur.archlinux.org/rpc?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\""
 			} else {
-				puts $fid "wget -LqO - \"https://aur.archlinux.org//rpc/?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\""
+				puts $fid "wget -LqO - \"https://aur.archlinux.org/rpc?v=5&type=info$list\" > \"$tmp_dir/vpacman_aur_result\""
 			}	
 			close $fid
 			exec chmod 0755 "$tmp_dir/thread_aur_versions.sh"
