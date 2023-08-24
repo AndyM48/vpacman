@@ -1,3 +1,5 @@
+## ** vpacman has moved to gitlab **
+
 # vpacman
 A graphical front end for pacman and the AUR - built with Tcl/Tk
 
